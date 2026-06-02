@@ -1,1 +1,18 @@
+/.idea/
+/.vscode/
+
+# Build outputs
+/bin/
+/dist/
+/WeCourseService
 /WeCourseService.exe
+/wecourse-service
+/wecourse-service.exe
+
+# Go workspace/cache files
+/go.work
+/go.work.sum
+
+# Local environment files
+.env
+.env.*

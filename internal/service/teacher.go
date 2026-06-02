@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"crypto/sha1"
@@ -190,3 +190,4 @@ func GetTeacher(UserName, PassWord string) string {
 	return B2S(js)
 
 }
+

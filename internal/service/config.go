@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"encoding/json"
@@ -26,3 +26,4 @@ func ReadConfig() Config {
 	}
 	return conf
 }
+

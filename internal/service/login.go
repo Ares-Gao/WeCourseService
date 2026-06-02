@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"crypto/sha1"
@@ -96,3 +96,4 @@ func GetUserLogin(UserName, PassWord string) string {
 	js, err := json.MarshalIndent(myLogin, "", "\t")
 	return B2S(js) //Write cache in here
 }
+

@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"crypto/sha1"
@@ -130,3 +130,4 @@ func GetPhoto(UserName, PassWord string) string {
 	js, err := json.MarshalIndent(myPhotoResult, "", "\t")
 	return B2S(js) //Write cache in here
 }
+

@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"encoding/json"
@@ -68,3 +68,4 @@ func GetWeekDay() int {
 	wd := time.Now().Weekday().String()
 	return WeekDayMap[wd]
 }
+

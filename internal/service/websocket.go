@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"encoding/json"
@@ -79,3 +79,4 @@ func checkErr(err error) {
 	if err != nil {
 	}
 }
+

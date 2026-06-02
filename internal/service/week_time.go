@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"encoding/json"
@@ -47,3 +47,4 @@ func GetWeekTimeOld(serverIP, startTime string) string {
 	}
 	return string(content)
 }
+

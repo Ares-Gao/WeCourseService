@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"crypto/sha1"
@@ -162,3 +162,4 @@ func GetGrade(UserName, PassWord string) string {
 	js, err := json.MarshalIndent(gradeResult, "", "\t")
 	return B2S(js)
 }
+

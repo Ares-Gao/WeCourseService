@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 /*
 为对付uni-app及微信小程序只能创建一个websocket链接的弱智举动，特针对返回JSON进行统一格式管理
@@ -44,3 +44,4 @@ type GradeResult struct {
 	Type string
 	Data []GradeStruct
 }
+

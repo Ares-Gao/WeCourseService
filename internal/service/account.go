@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"crypto/sha1"
@@ -159,3 +159,4 @@ func GetAccount(UserName, PassWord string) string {
 	js, err := json.MarshalIndent(myAccountResult, "", "\t")
 	return B2S(js)
 }
+

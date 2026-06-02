@@ -1,4 +1,4 @@
-package main
+﻿package service
 
 import (
 	"encoding/json"
@@ -50,3 +50,4 @@ func GetWeekCourseNew(UserName string, PassWord string, WeekDay int) string {
 	js, _ := json.MarshalIndent(myCourseResultNew, "", "\t")
 	return B2S(js)
 }
+
