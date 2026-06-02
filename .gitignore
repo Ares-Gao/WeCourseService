@@ -13,6 +13,15 @@
 /go.work
 /go.work.sum
 
+# Python
+__pycache__/
+*.py[cod]
+/.pytest_cache/
+/python/.venv/
+/python/build/
+/python/dist/
+/python/*.egg-info/
+
 # Local environment files
 .env
 .env.*

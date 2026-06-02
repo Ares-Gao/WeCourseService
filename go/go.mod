@@ -1,4 +1,4 @@
-module github.com/Ares-Gao/WeCourseService
+module github.com/Ares-Gao/WeCourseService/go
 
 go 1.22
 

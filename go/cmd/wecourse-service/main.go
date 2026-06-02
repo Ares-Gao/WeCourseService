@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Ares-Gao/WeCourseService/internal/service"
+	"github.com/Ares-Gao/WeCourseService/go/internal/service"
 )
 
 func main() {
