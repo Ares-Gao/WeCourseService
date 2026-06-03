@@ -23,6 +23,7 @@ require __DIR__ . '/vendor/autoload.php';
 $config = WeCourseConfig::load(__DIR__ . '/../config.json');
 $client = new SupwisdomClient($config);
 echo $client->getWeekTime();
+echo $client->getCourse('username', 'password', 'authserver', $config->AuthServerURL);
 ```
 
 也可以不使用 Composer，直接 require `src/WeCourseConfig.php` 和 `src/SupwisdomClient.php`。

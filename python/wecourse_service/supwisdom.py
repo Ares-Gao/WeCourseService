@@ -5,6 +5,7 @@ import hashlib
 import json
 import random
 import re
+from dataclasses import replace
 from datetime import datetime
 from time import sleep, time
 from typing import Any
@@ -125,8 +126,14 @@ def _clean_js_text(text: str) -> str:
     return text.replace('"+periodInfo+"', "").replace("\\\"", "\"")
 
 
-def _login(username: str, password: str) -> requests.Session:
+def _login(username: str, password: str, login_type: str = "", authserver_url: str = "") -> requests.Session:
     config = read_config()
+    if login_type or authserver_url:
+        config = replace(
+            config,
+            LoginType=login_type or config.LoginType,
+            AuthServerURL=authserver_url or config.AuthServerURL,
+        )
     if config.LoginType.lower() == "authserver":
         return _authserver_login(username, password, config)
 
@@ -321,57 +328,66 @@ def _parse_courses(html: str) -> list[dict[str, Any]]:
     return courses
 
 
-def get_user_login(username: str, password: str) -> str:
+def get_user_login(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
     try:
-        session = _login(username, password)
+        session = _login(username, password, login_type, authserver_url)
     except Exception:
         return _json_response("login", "登录失败")
     _logout(session)
     return _json_response("login", "登录成功")
 
 
-def get_course(username: str, password: str) -> str:
-    cache_item = _course_cache.get(username)
+def get_course(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    cache_key = f"{login_type or read_config().LoginType}:{authserver_url}:{username}"
+    cache_item = _course_cache.get(cache_key)
     if cache_item and time() - cache_item[0] < 3600:
         return cache_item[1]
 
-    session = _login(username, password)
+    session = _login(username, password, login_type, authserver_url)
     try:
         html = _course_table_html(session)
         teachers = _parse_teachers(html)
         courses = _parse_courses(html)
         response = _json_response("allcourse", courses)
-        _course_cache[username] = (time(), response, teachers)
+        _course_cache[cache_key] = (time(), response, teachers)
         return response
     finally:
         _logout(session)
 
 
-def get_teacher(username: str, password: str) -> str:
-    session = _login(username, password)
+def get_teacher(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    session = _login(username, password, login_type, authserver_url)
     try:
         return _json_response("teacher", _parse_teachers(_course_table_html(session)))
     finally:
         _logout(session)
 
 
-def get_semesters(username: str, password: str) -> str:
-    session = _login(username, password)
+def get_semesters(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    session = _login(username, password, login_type, authserver_url)
     try:
         return _json_response("semester", _semester_payload(session))
     finally:
         _logout(session)
 
 
-def _teacher_cache(username: str) -> list[dict[str, str]]:
-    cache_item = _course_cache.get(username)
+def _teacher_cache(username: str, login_type: str = "", authserver_url: str = "") -> list[dict[str, str]]:
+    cache_key = f"{login_type or read_config().LoginType}:{authserver_url}:{username}"
+    cache_item = _course_cache.get(cache_key)
     return cache_item[2] if cache_item else []
 
 
-def get_week_course(username: str, password: str, week: int, response_type: str = "course") -> str:
-    result = json.loads(get_course(username, password))
+def get_week_course(
+    username: str,
+    password: str,
+    week: int,
+    response_type: str = "course",
+    login_type: str = "",
+    authserver_url: str = "",
+) -> str:
+    result = json.loads(get_course(username, password, login_type, authserver_url))
     courses = result.get("Data", [])
-    teachers = _teacher_cache(username)
+    teachers = _teacher_cache(username, login_type, authserver_url)
     week_courses = []
 
     for course in courses:
@@ -393,10 +409,10 @@ def get_week_course(username: str, password: str, week: int, response_type: str 
     return _json_response(response_type, week_courses)
 
 
-def get_week_course_new(username: str, password: str, week: int) -> str:
-    result = json.loads(get_course(username, password))
+def get_week_course_new(username: str, password: str, week: int, login_type: str = "", authserver_url: str = "") -> str:
+    result = json.loads(get_course(username, password, login_type, authserver_url))
     courses = result.get("Data", [])
-    teachers = _teacher_cache(username)
+    teachers = _teacher_cache(username, login_type, authserver_url)
     week_courses = []
 
     for course in courses:
@@ -416,12 +432,12 @@ def get_week_course_new(username: str, password: str, week: int) -> str:
     return _json_response("course", week_courses)
 
 
-def get_day_course(username: str, password: str) -> str:
+def get_day_course(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
     week = int(json.loads(get_week_time(read_config().CalendarFirst))["Data"])
     weekday = datetime.now().weekday()
-    result = json.loads(get_course(username, password))
+    result = json.loads(get_course(username, password, login_type, authserver_url))
     courses = result.get("Data", [])
-    teachers = _teacher_cache(username)
+    teachers = _teacher_cache(username, login_type, authserver_url)
     day_courses = []
 
     for course in courses:
@@ -452,8 +468,8 @@ def get_week_time(start_time: str) -> str:
     return _json_response("week", str(week))
 
 
-def get_account(username: str, password: str) -> str:
-    session = _login(username, password)
+def get_account(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    session = _login(username, password, login_type, authserver_url)
     try:
         response = session.get(_base_url() + "eams/stdDetail.action", timeout=15)
         response.raise_for_status()
@@ -475,8 +491,8 @@ def get_account(username: str, password: str) -> str:
         _logout(session)
 
 
-def get_photo(username: str, password: str) -> str:
-    session = _login(username, password)
+def get_photo(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    session = _login(username, password, login_type, authserver_url)
     try:
         response = session.get(_base_url() + f"eams/showSelfAvatar.action?user.name={username}", timeout=15)
         response.raise_for_status()
@@ -486,8 +502,8 @@ def get_photo(username: str, password: str) -> str:
         _logout(session)
 
 
-def get_grade(username: str, password: str) -> str:
-    session = _login(username, password)
+def get_grade(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    session = _login(username, password, login_type, authserver_url)
     try:
         response = session.post(
             _base_url() + "eams/teach/grade/course/person!historyCourseGrade.action?projectType=MAJOR",

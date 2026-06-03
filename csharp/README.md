@@ -21,6 +21,7 @@ using WeCourseServiceSdk;
 var config = WeCourseConfig.Load("../config.json");
 var client = new SupwisdomClient(config);
 var weekJson = client.GetWeekTime();
+var courses = client.GetCourse("username", "password", loginType: "authserver", authServerUrl: config.AuthServerURL);
 ```
 
 如果学校启用了普通图片验证码，实现 `ICaptchaSolver` 并传入客户端：

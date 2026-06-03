@@ -28,6 +28,7 @@ javac -encoding UTF-8 -d out src/main/java/io/github/aresgao/wecourseservice/*.j
 var config = WeCourseConfig.load("../config.json");
 var client = new SupwisdomClient(config);
 System.out.println(client.getWeekTime());
+System.out.println(client.getCourse("username", "password", "authserver", config.AuthServerURL()));
 ```
 
 如果学校启用了普通图片验证码，实现 `CaptchaSolver` 并传入客户端：

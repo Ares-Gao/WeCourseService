@@ -30,30 +30,32 @@ def dispatch(message: str) -> str:
     username = payload.get("UserName", "")
     password = payload.get("PassWord", "")
     week = int(payload.get("Week", 0))
+    login_type = payload.get("LoginType", "")
+    authserver_url = payload.get("AuthServerURL", "")
     config = read_config()
 
     if request_type == "allcourse":
-        return get_course(username, password)
+        return get_course(username, password, login_type, authserver_url)
     if request_type == "daycourse":
-        return get_day_course(username, password)
+        return get_day_course(username, password, login_type, authserver_url)
     if request_type == "course":
-        return get_week_course(username, password, week)
+        return get_week_course(username, password, week, login_type=login_type, authserver_url=authserver_url)
     if request_type == "weekcourse":
-        return get_week_course_new(username, password, week)
+        return get_week_course_new(username, password, week, login_type, authserver_url)
     if request_type == "account":
-        return get_account(username, password)
+        return get_account(username, password, login_type, authserver_url)
     if request_type == "login":
-        return get_user_login(username, password)
+        return get_user_login(username, password, login_type, authserver_url)
     if request_type == "week":
         return get_week_time(config.CalendarFirst)
     if request_type == "teacher":
-        return get_teacher(username, password)
+        return get_teacher(username, password, login_type, authserver_url)
     if request_type == "photo":
-        return get_photo(username, password)
+        return get_photo(username, password, login_type, authserver_url)
     if request_type == "grade":
-        return get_grade(username, password)
+        return get_grade(username, password, login_type, authserver_url)
     if request_type == "semester":
-        return get_semesters(username, password)
+        return get_semesters(username, password, login_type, authserver_url)
     return json.dumps({"Type": request_type, "Data": "unsupported request type"}, ensure_ascii=False, indent="\t")
 
 

@@ -57,6 +57,18 @@ export WECOURSE_CONFIG=../config.json
 
 Python 版本会在 authserver 模式下自动调用 `checkNeedCaptcha.htl` 判断是否需要验证码。若需要普通图片验证码，会拉取 `getCaptcha.htl` 并使用 `ddddocr` 自动识别，失败时按 `AuthServerCaptchaRetries` 重试。
 
+`LoginType` 和 `AuthServerURL` 不必固定在全局配置中。WebSocket 请求可以按用户或学校传入同名字段覆盖默认值：
+
+```json
+{
+	"Type": "allcourse",
+	"UserName": "201808830303",
+	"PassWord": "7355608",
+	"LoginType": "authserver",
+	"AuthServerURL": "https://authserver.snut.edu.cn/authserver/login?service=http%3A%2F%2Fjwgl.snut.edu.cn%2Feams%2FssoLogin.action"
+}
+```
+
 ## 启动
 
 ```bash

@@ -21,11 +21,11 @@ public sealed class SupwisdomClient
         _captchaSolver = captchaSolver;
     }
 
-    public string Login(string username, string password)
+    public string Login(string username, string password, string loginType = "", string authServerUrl = "")
     {
         try
         {
-            using var session = CreateLoggedInClient(username, password);
+            using var session = CreateLoggedInClient(username, password, loginType, authServerUrl);
             return JsonResponse("login", "登录成功");
         }
         catch
@@ -41,40 +41,42 @@ public sealed class SupwisdomClient
         return JsonResponse("week", week.ToString());
     }
 
-    public string GetSemesters(string username, string password)
+    public string GetSemesters(string username, string password, string loginType = "", string authServerUrl = "")
     {
-        using var client = CreateLoggedInClient(username, password);
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
         var page = client.GetStringAsync(_config.BaseUrl + "eams/courseTableForStd.action").GetAwaiter().GetResult();
         var (ids, semesterId) = ExtractCourseTableParams(page);
         return JsonResponse("semester", new[] { new Semester(semesterId, ids, true) });
     }
 
-    public string GetCourse(string username, string password)
+    public string GetCourse(string username, string password, string loginType = "", string authServerUrl = "")
     {
-        if (_courseCache.TryGetValue(username, out var item) && DateTimeOffset.Now - item.CreatedAt < TimeSpan.FromHours(1))
+        var cacheKey = $"{(string.IsNullOrWhiteSpace(loginType) ? _config.LoginType : loginType)}:{authServerUrl}:{username}";
+        if (_courseCache.TryGetValue(cacheKey, out var item) && DateTimeOffset.Now - item.CreatedAt < TimeSpan.FromHours(1))
         {
             return item.Json;
         }
 
-        using var client = CreateLoggedInClient(username, password);
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
         var html = GetCourseTableHtml(client);
         var teachers = ParseTeachers(html);
         var courses = ParseCourses(html);
         var json = JsonResponse("allcourse", courses);
-        _courseCache[username] = (DateTimeOffset.Now, json, teachers);
+        _courseCache[cacheKey] = (DateTimeOffset.Now, json, teachers);
         return json;
     }
 
-    public string GetTeacher(string username, string password)
+    public string GetTeacher(string username, string password, string loginType = "", string authServerUrl = "")
     {
-        using var client = CreateLoggedInClient(username, password);
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
         return JsonResponse("teacher", ParseTeachers(GetCourseTableHtml(client)));
     }
 
-    public string GetWeekCourse(string username, string password, int week)
+    public string GetWeekCourse(string username, string password, int week, string loginType = "", string authServerUrl = "")
     {
-        var courses = JsonSerializer.Deserialize<Response<List<Course>>>(GetCourse(username, password))?.Data ?? [];
-        var teachers = _courseCache.TryGetValue(username, out var cache) ? cache.Teachers : [];
+        var courses = JsonSerializer.Deserialize<Response<List<Course>>>(GetCourse(username, password, loginType, authServerUrl))?.Data ?? [];
+        var cacheKey = $"{(string.IsNullOrWhiteSpace(loginType) ? _config.LoginType : loginType)}:{authServerUrl}:{username}";
+        var teachers = _courseCache.TryGetValue(cacheKey, out var cache) ? cache.Teachers : [];
         var result = new List<WeekCourse>();
 
         foreach (var course in courses)
@@ -103,25 +105,25 @@ public sealed class SupwisdomClient
         return JsonResponse("course", result);
     }
 
-    public string GetAccount(string username, string password)
+    public string GetAccount(string username, string password, string loginType = "", string authServerUrl = "")
     {
-        using var client = CreateLoggedInClient(username, password);
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
         var html = client.GetStringAsync(_config.BaseUrl + "eams/stdDetail.action").GetAwaiter().GetResult();
         var info = Regex.Matches(html, "(?i)<td>([^>]*)</td>").Select(item => item.Groups[1].Value).ToList();
         var student = new Student(info[0], info[1], info[2], info[11], info[12], info[4], $"{info[5]}({info[14]})", info[8], info[9], info[18]);
         return JsonResponse("account", student);
     }
 
-    public string GetPhoto(string username, string password)
+    public string GetPhoto(string username, string password, string loginType = "", string authServerUrl = "")
     {
-        using var client = CreateLoggedInClient(username, password);
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
         var bytes = client.GetByteArrayAsync(_config.BaseUrl + $"eams/showSelfAvatar.action?user.name={username}").GetAwaiter().GetResult();
         return JsonResponse("photo", "data:image/jpg;base64," + Convert.ToBase64String(bytes));
     }
 
-    public string GetGrade(string username, string password)
+    public string GetGrade(string username, string password, string loginType = "", string authServerUrl = "")
     {
-        using var client = CreateLoggedInClient(username, password);
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
         var response = client.PostAsync(_config.BaseUrl + "eams/teach/grade/course/person!historyCourseGrade.action?projectType=MAJOR", new FormUrlEncodedContent([])).GetAwaiter().GetResult();
         response.EnsureSuccessStatusCode();
         var html = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
@@ -148,11 +150,12 @@ public sealed class SupwisdomClient
         return JsonResponse("grade", grades);
     }
 
-    private HttpClient CreateLoggedInClient(string username, string password)
+    private HttpClient CreateLoggedInClient(string username, string password, string loginType = "", string authServerUrl = "")
     {
-        if (string.Equals(_config.LoginType, "authserver", StringComparison.OrdinalIgnoreCase))
+        var resolvedLoginType = string.IsNullOrWhiteSpace(loginType) ? _config.LoginType : loginType;
+        if (string.Equals(resolvedLoginType, "authserver", StringComparison.OrdinalIgnoreCase))
         {
-            return CreateAuthServerLoggedInClient(username, password);
+            return CreateAuthServerLoggedInClient(username, password, authServerUrl);
         }
 
         var handler = new HttpClientHandler { CookieContainer = new CookieContainer() };
@@ -183,9 +186,10 @@ public sealed class SupwisdomClient
         return client;
     }
 
-    private HttpClient CreateAuthServerLoggedInClient(string username, string password)
+    private HttpClient CreateAuthServerLoggedInClient(string username, string password, string authServerUrl = "")
     {
-        if (string.IsNullOrWhiteSpace(_config.AuthServerURL))
+        var loginUrl = string.IsNullOrWhiteSpace(authServerUrl) ? _config.AuthServerURL : authServerUrl;
+        if (string.IsNullOrWhiteSpace(loginUrl))
         {
             throw new InvalidOperationException("AuthServerURL is required for authserver login.");
         }
@@ -194,7 +198,7 @@ public sealed class SupwisdomClient
         var client = new HttpClient(handler);
         client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
 
-        var loginHtml = client.GetStringAsync(_config.AuthServerURL).GetAwaiter().GetResult();
+        var loginHtml = client.GetStringAsync(loginUrl).GetAwaiter().GetResult();
         var salt = InputValue(loginHtml, elementId: "pwdEncryptSalt");
         var execution = InputValue(loginHtml, name: "execution");
         if (string.IsNullOrWhiteSpace(salt) || string.IsNullOrWhiteSpace(execution))
@@ -209,11 +213,11 @@ public sealed class SupwisdomClient
             {
                 throw new InvalidOperationException("Authserver captcha is required. Provide an ICaptchaSolver implementation.");
             }
-            var captchaBytes = client.GetByteArrayAsync(AuthServerBase(_config.AuthServerURL) + "/getCaptcha.htl?" + DateTimeOffset.Now.ToUnixTimeMilliseconds()).GetAwaiter().GetResult();
+            var captchaBytes = client.GetByteArrayAsync(AuthServerBase(loginUrl) + "/getCaptcha.htl?" + DateTimeOffset.Now.ToUnixTimeMilliseconds()).GetAwaiter().GetResult();
             captcha = _captchaSolver.Solve(captchaBytes);
         }
 
-        var response = client.PostAsync(_config.AuthServerURL, new FormUrlEncodedContent(new Dictionary<string, string>
+        var response = client.PostAsync(loginUrl, new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["username"] = username,
             ["password"] = AuthServerEncryptPassword(password, salt),

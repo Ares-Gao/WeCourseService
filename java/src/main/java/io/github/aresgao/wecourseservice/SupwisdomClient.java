@@ -44,8 +44,12 @@ public final class SupwisdomClient {
     }
 
     public String login(String username, String password) {
+        return login(username, password, "", "");
+    }
+
+    public String login(String username, String password, String loginType, String authServerUrl) {
         try {
-            createLoggedInClient(username, password);
+            createLoggedInClient(username, password, loginType, authServerUrl);
             return jsonResponse("login", "\"登录成功\"");
         } catch (Exception ex) {
             return jsonResponse("login", "\"登录失败\"");
@@ -59,35 +63,53 @@ public final class SupwisdomClient {
     }
 
     public String getSemesters(String username, String password) throws Exception {
-        var client = createLoggedInClient(username, password);
+        return getSemesters(username, password, "", "");
+    }
+
+    public String getSemesters(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
         var page = get(client, config.baseUrl() + "eams/courseTableForStd.action");
         var params = extractCourseTableParams(page);
         return jsonResponse("semester", "[{\"SemesterID\":" + quote(params.semesterId()) + ",\"Ids\":" + quote(params.ids()) + ",\"Current\":true}]");
     }
 
     public String getCourse(String username, String password) throws Exception {
-        var cached = courseCache.get(username);
+        return getCourse(username, password, "", "");
+    }
+
+    public String getCourse(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var cacheKey = valueOr(loginType, config.LoginType()) + ":" + authServerUrl + ":" + username;
+        var cached = courseCache.get(cacheKey);
         if (cached != null && System.currentTimeMillis() - cached.createdAt < 3600_000) {
             return cached.json;
         }
 
-        var client = createLoggedInClient(username, password);
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
         var html = courseTableHtml(client);
         var teachers = parseTeachers(html);
         var courses = parseCourses(html);
         var json = jsonResponse("allcourse", coursesJson(courses));
-        courseCache.put(username, new CacheItem(System.currentTimeMillis(), json, teachers, courses));
+        courseCache.put(cacheKey, new CacheItem(System.currentTimeMillis(), json, teachers, courses));
         return json;
     }
 
     public String getTeacher(String username, String password) throws Exception {
-        var client = createLoggedInClient(username, password);
+        return getTeacher(username, password, "", "");
+    }
+
+    public String getTeacher(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
         return jsonResponse("teacher", teachersJson(parseTeachers(courseTableHtml(client))));
     }
 
     public String getWeekCourse(String username, String password, int week) throws Exception {
-        getCourse(username, password);
-        var cached = courseCache.get(username);
+        return getWeekCourse(username, password, week, "", "");
+    }
+
+    public String getWeekCourse(String username, String password, int week, String loginType, String authServerUrl) throws Exception {
+        getCourse(username, password, loginType, authServerUrl);
+        var cacheKey = valueOr(loginType, config.LoginType()) + ":" + authServerUrl + ":" + username;
+        var cached = courseCache.get(cacheKey);
         var result = new ArrayList<String>();
         for (var course : cached.courses) {
             if (week >= course.Weeks().length() || course.Weeks().charAt(week) != '1') {
@@ -109,7 +131,11 @@ public final class SupwisdomClient {
     }
 
     public String getAccount(String username, String password) throws Exception {
-        var client = createLoggedInClient(username, password);
+        return getAccount(username, password, "", "");
+    }
+
+    public String getAccount(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
         var html = get(client, config.baseUrl() + "eams/stdDetail.action");
         var info = matchAll(html, "(?i)<td>([^>]*)</td>");
         return jsonResponse("account", "{" +
@@ -127,14 +153,22 @@ public final class SupwisdomClient {
     }
 
     public String getPhoto(String username, String password) throws Exception {
-        var client = createLoggedInClient(username, password);
+        return getPhoto(username, password, "", "");
+    }
+
+    public String getPhoto(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
         var request = HttpRequest.newBuilder(URI.create(config.baseUrl() + "eams/showSelfAvatar.action?user.name=" + URLEncoder.encode(username, StandardCharsets.UTF_8))).header("User-Agent", USER_AGENT).GET().build();
         var bytes = client.send(request, HttpResponse.BodyHandlers.ofByteArray()).body();
         return jsonResponse("photo", quote("data:image/jpg;base64," + Base64.getEncoder().encodeToString(bytes)));
     }
 
     public String getGrade(String username, String password) throws Exception {
-        var client = createLoggedInClient(username, password);
+        return getGrade(username, password, "", "");
+    }
+
+    public String getGrade(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
         var html = post(client, config.baseUrl() + "eams/teach/grade/course/person!historyCourseGrade.action?projectType=MAJOR", "");
         var rows = matchRows(html);
         var grades = new ArrayList<String>();
@@ -156,9 +190,10 @@ public final class SupwisdomClient {
         return jsonResponse("grade", "[" + String.join(",", grades) + "]");
     }
 
-    private HttpClient createLoggedInClient(String username, String password) throws Exception {
-        if ("authserver".equalsIgnoreCase(config.LoginType())) {
-            return createAuthServerLoggedInClient(username, password);
+    private HttpClient createLoggedInClient(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var resolvedLoginType = valueOr(loginType, config.LoginType());
+        if ("authserver".equalsIgnoreCase(resolvedLoginType)) {
+            return createAuthServerLoggedInClient(username, password, authServerUrl);
         }
 
         var cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
@@ -176,14 +211,15 @@ public final class SupwisdomClient {
         return client;
     }
 
-    private HttpClient createAuthServerLoggedInClient(String username, String password) throws Exception {
-        if (config.AuthServerURL().isBlank()) {
+    private HttpClient createAuthServerLoggedInClient(String username, String password, String authServerUrl) throws Exception {
+        var loginUrl = valueOr(authServerUrl, config.AuthServerURL());
+        if (loginUrl.isBlank()) {
             throw new IllegalStateException("AuthServerURL is required for authserver login.");
         }
 
         var cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         var client = HttpClient.newBuilder().cookieHandler(cookieManager).build();
-        var html = get(client, config.AuthServerURL());
+        var html = get(client, loginUrl);
         var salt = inputValue(html, "", "pwdEncryptSalt");
         var execution = inputValue(html, "execution", "");
         if (salt.isBlank() || execution.isBlank()) {
@@ -195,11 +231,11 @@ public final class SupwisdomClient {
             if (captchaSolver == null) {
                 throw new IllegalStateException("Authserver captcha is required. Provide a CaptchaSolver implementation.");
             }
-            var imageRequest = HttpRequest.newBuilder(URI.create(authServerBase(config.AuthServerURL()) + "/getCaptcha.htl?" + System.currentTimeMillis())).header("User-Agent", USER_AGENT).GET().build();
+            var imageRequest = HttpRequest.newBuilder(URI.create(authServerBase(loginUrl) + "/getCaptcha.htl?" + System.currentTimeMillis())).header("User-Agent", USER_AGENT).GET().build();
             captcha = captchaSolver.solve(client.send(imageRequest, HttpResponse.BodyHandlers.ofByteArray()).body());
         }
 
-        var response = post(client, config.AuthServerURL(), form(Map.of(
+        var response = post(client, loginUrl, form(Map.of(
                 "username", username,
                 "password", authServerEncryptPassword(password, salt),
                 "captcha", captcha,

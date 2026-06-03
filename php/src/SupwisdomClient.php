@@ -16,10 +16,10 @@ final class SupwisdomClient
     {
     }
 
-    public function login(string $username, string $password): string
+    public function login(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
         try {
-            $cookie = $this->createLoggedInCookie($username, $password);
+            $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
             @unlink($cookie);
             return $this->jsonResponse('login', '登录成功');
         } catch (Throwable) {
@@ -34,9 +34,9 @@ final class SupwisdomClient
         return $this->jsonResponse('week', (string) $week);
     }
 
-    public function getSemesters(string $username, string $password): string
+    public function getSemesters(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
-        $cookie = $this->createLoggedInCookie($username, $password);
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
         try {
             $page = $this->request('GET', $this->config->baseUrl() . 'eams/courseTableForStd.action', [], $cookie);
             [$ids, $semesterId] = $this->extractCourseTableParams($page);
@@ -49,19 +49,20 @@ final class SupwisdomClient
         }
     }
 
-    public function getCourse(string $username, string $password): string
+    public function getCourse(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
-        if (isset($this->courseCache[$username]) && time() - $this->courseCache[$username]['time'] < 3600) {
-            return $this->courseCache[$username]['json'];
+        $cacheKey = ($loginType !== '' ? $loginType : $this->config->LoginType) . ':' . $authServerUrl . ':' . $username;
+        if (isset($this->courseCache[$cacheKey]) && time() - $this->courseCache[$cacheKey]['time'] < 3600) {
+            return $this->courseCache[$cacheKey]['json'];
         }
 
-        $cookie = $this->createLoggedInCookie($username, $password);
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
         try {
             $html = $this->courseTableHtml($cookie);
             $teachers = $this->parseTeachers($html);
             $courses = $this->parseCourses($html);
             $json = $this->jsonResponse('allcourse', $courses);
-            $this->courseCache[$username] = ['time' => time(), 'json' => $json, 'teachers' => $teachers];
+            $this->courseCache[$cacheKey] = ['time' => time(), 'json' => $json, 'teachers' => $teachers];
             return $json;
         } finally {
             $this->request('GET', $this->config->baseUrl() . 'eams/logout.action', [], $cookie);
@@ -69,9 +70,9 @@ final class SupwisdomClient
         }
     }
 
-    public function getTeacher(string $username, string $password): string
+    public function getTeacher(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
-        $cookie = $this->createLoggedInCookie($username, $password);
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
         try {
             return $this->jsonResponse('teacher', $this->parseTeachers($this->courseTableHtml($cookie)));
         } finally {
@@ -80,10 +81,11 @@ final class SupwisdomClient
         }
     }
 
-    public function getWeekCourse(string $username, string $password, int $week): string
+    public function getWeekCourse(string $username, string $password, int $week, string $loginType = '', string $authServerUrl = ''): string
     {
-        $payload = json_decode($this->getCourse($username, $password), true, 512, JSON_THROW_ON_ERROR);
-        $teachers = $this->courseCache[$username]['teachers'] ?? [];
+        $payload = json_decode($this->getCourse($username, $password, $loginType, $authServerUrl), true, 512, JSON_THROW_ON_ERROR);
+        $cacheKey = ($loginType !== '' ? $loginType : $this->config->LoginType) . ':' . $authServerUrl . ':' . $username;
+        $teachers = $this->courseCache[$cacheKey]['teachers'] ?? [];
         $result = [];
 
         foreach ($payload['Data'] as $course) {
@@ -108,9 +110,9 @@ final class SupwisdomClient
         return $this->jsonResponse('course', $result);
     }
 
-    public function getAccount(string $username, string $password): string
+    public function getAccount(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
-        $cookie = $this->createLoggedInCookie($username, $password);
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
         try {
             $html = $this->request('GET', $this->config->baseUrl() . 'eams/stdDetail.action', [], $cookie);
             preg_match_all('/(?i)<td>([^>]*)<\/td>/', $html, $matches);
@@ -133,9 +135,9 @@ final class SupwisdomClient
         }
     }
 
-    public function getPhoto(string $username, string $password): string
+    public function getPhoto(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
-        $cookie = $this->createLoggedInCookie($username, $password);
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
         try {
             $image = $this->request('GET', $this->config->baseUrl() . 'eams/showSelfAvatar.action?user.name=' . urlencode($username), [], $cookie);
             return $this->jsonResponse('photo', 'data:image/jpg;base64,' . base64_encode($image));
@@ -145,9 +147,9 @@ final class SupwisdomClient
         }
     }
 
-    public function getGrade(string $username, string $password): string
+    public function getGrade(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
-        $cookie = $this->createLoggedInCookie($username, $password);
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
         try {
             $html = $this->request('POST', $this->config->baseUrl() . 'eams/teach/grade/course/person!historyCourseGrade.action?projectType=MAJOR', [], $cookie);
             preg_match_all('/(?i)<tr>[\s\S]*?<\/tr>/', $html, $rows);
@@ -175,10 +177,11 @@ final class SupwisdomClient
         }
     }
 
-    private function createLoggedInCookie(string $username, string $password): string
+    private function createLoggedInCookie(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
-        if (strtolower($this->config->LoginType) === 'authserver') {
-            return $this->createAuthServerLoggedInCookie($username, $password);
+        $resolvedLoginType = $loginType !== '' ? $loginType : $this->config->LoginType;
+        if (strtolower($resolvedLoginType) === 'authserver') {
+            return $this->createAuthServerLoggedInCookie($username, $password, $authServerUrl);
         }
 
         $cookie = tempnam(sys_get_temp_dir(), 'wecourse_cookie_');
@@ -197,14 +200,15 @@ final class SupwisdomClient
         return $cookie;
     }
 
-    private function createAuthServerLoggedInCookie(string $username, string $password): string
+    private function createAuthServerLoggedInCookie(string $username, string $password, string $authServerUrl = ''): string
     {
-        if ($this->config->AuthServerURL === '') {
+        $loginUrl = $authServerUrl !== '' ? $authServerUrl : $this->config->AuthServerURL;
+        if ($loginUrl === '') {
             throw new RuntimeException('AuthServerURL is required for authserver login.');
         }
 
         $cookie = tempnam(sys_get_temp_dir(), 'wecourse_cookie_');
-        $html = $this->request('GET', $this->config->AuthServerURL, [], $cookie);
+        $html = $this->request('GET', $loginUrl, [], $cookie);
         $salt = $this->inputValue($html, elementId: 'pwdEncryptSalt');
         $execution = $this->inputValue($html, name: 'execution');
         if ($salt === '' || $execution === '') {
@@ -216,11 +220,11 @@ final class SupwisdomClient
             if (!is_callable($this->captchaSolver)) {
                 throw new RuntimeException('Authserver captcha is required. Provide a callable captcha solver.');
             }
-            $image = $this->request('GET', $this->authServerBase() . '/getCaptcha.htl?' . time(), [], $cookie);
+            $image = $this->request('GET', $this->authServerBase($loginUrl) . '/getCaptcha.htl?' . time(), [], $cookie);
             $captcha = (string) call_user_func($this->captchaSolver, $image);
         }
 
-        $response = $this->request('POST', $this->config->AuthServerURL, [
+        $response = $this->request('POST', $loginUrl, [
             'username' => $username,
             'password' => $this->authServerEncryptPassword($password, $salt),
             'captcha' => $captcha,
@@ -376,9 +380,9 @@ final class SupwisdomClient
             || (str_contains($html, 'getCaptcha.htl') && str_contains($html, 'captchaDiv'));
     }
 
-    private function authServerBase(): string
+    private function authServerBase(string $loginUrl): string
     {
-        $parts = parse_url($this->config->AuthServerURL);
+        $parts = parse_url($loginUrl);
         $path = $parts['path'] ?? '/authserver/login';
         $index = strpos($path, '/login');
         $context = $index === false ? '/authserver' : substr($path, 0, $index);
