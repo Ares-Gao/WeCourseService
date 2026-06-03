@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"encoding/json"
@@ -7,14 +7,20 @@ import (
 )
 
 type Config struct {
-	SchoolName    string
-	MangerType    string
-	MangerURL     string
-	CalendarFirst string
-	SocketPort    int
-	LoginType     string
-	AuthServerURL string
-	ServiceURL     string
+	SchoolName                string
+	MangerType                string
+	MangerURL                 string
+	CalendarFirst             string
+	SocketPort                int
+	LoginType                 string
+	AuthServerURL             string
+	ServiceURL                string
+	AuthServerAutoCaptcha     bool
+	AuthServerCaptchaRetries  int
+	DdddOcrOnnxRuntimeLibPath string
+	DdddOcrModelPath          string
+	DdddOcrDetModelPath       string
+	DdddOcrUseCustomModel     bool
 }
 
 func ReadConfig() Config {
@@ -29,4 +35,3 @@ func ReadConfig() Config {
 	}
 	return conf
 }
-

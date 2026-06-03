@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"encoding/json"
@@ -20,12 +20,16 @@ var tmpCourse WeekCourse
 var myCourseResult WeekCourseResult
 
 func GetWeekCourse(UserName string, PassWord string, WeekDay int) string {
+	return GetWeekCourseWithLogin(UserName, PassWord, WeekDay, "", "")
+}
+
+func GetWeekCourseWithLogin(UserName string, PassWord string, WeekDay int, loginType string, authServerURL string) string {
 	myWeekCourse = nil
 	myCourseResult.Type = "course"
 	var tmpResult CourseResult
 	var allCourses []Course
 	allCourses = nil
-	var cstr string = GetCourse(UserName, PassWord)
+	var cstr string = GetCourseWithLogin(UserName, PassWord, loginType, authServerURL)
 	err := json.Unmarshal([]byte(cstr), &tmpResult)
 	if err != nil {
 		fmt.Println(err)
@@ -56,4 +60,3 @@ func GetWeekCourse(UserName string, PassWord string, WeekDay int) string {
 	js, _ := json.MarshalIndent(myCourseResult, "", "\t")
 	return B2S(js)
 }
-

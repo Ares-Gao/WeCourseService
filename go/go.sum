@@ -1,4 +1,12 @@
+github.com/ebitengine/purego v0.9.0 h1:mh0zpKBIXDceC63hpvPuGLiJ8ZAa3DfrFTudmfi8A4k=
+github.com/ebitengine/purego v0.9.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
+github.com/getcharzp/go-ocr v0.0.0-20260126073315-15e83dd6ccce h1:m/BT4Fk9h2aum7JJ3JewqyRrDySUQ/xGhH05mfJfLrQ=
+github.com/getcharzp/go-ocr v0.0.0-20260126073315-15e83dd6ccce/go.mod h1:2MBjAl0RZOpexoNRywB+yjpXd018HH3AVlV3EZBpTAE=
+github.com/getcharzp/onnxruntime_purego v0.0.0-20260118041137-401482b32507 h1:d+3aUbLHK9Nfaex6GLlIhb0R7wLHV7LkiUiy0qwU54g=
+github.com/getcharzp/onnxruntime_purego v0.0.0-20260118041137-401482b32507/go.mod h1:JxWrTrdNfR1D0HBxOQixFeC1vkLoz8HPxfBwJ2gF/rw=
 github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=
 github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
+github.com/up-zero/gotool v0.0.0-20260120011100-d685b2532b5a h1:pY1cxEGXD+Sri3sjG2gZ/9HUyKoUkTVwwwMJGwkSPMg=
+github.com/up-zero/gotool v0.0.0-20260120011100-d685b2532b5a/go.mod h1:+jwIpLHojqHUvbEmNXv/F5acdHSEkJIbNXRqT1IE78I=

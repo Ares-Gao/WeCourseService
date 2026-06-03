@@ -1,14 +1,11 @@
-﻿package service
+package service
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/patrickmn/go-cache"
 	"io/ioutil"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -51,56 +48,20 @@ func GetTeacherObj() []TeacherStruct {
 }
 
 func GetSemester(UserName, PassWord string) string {
+	return GetSemesterWithLogin(UserName, PassWord, "", "")
+}
+
+func GetSemesterWithLogin(UserName, PassWord, loginType, authServerURL string) string {
 	conf := ReadConfig()
 	result := SemesterResult{Type: "semester"}
-
-	cookieJar, err := cookiejar.New(nil)
+	client, err := CreateLoggedInClient(conf, UserName, PassWord, LoginOptions{LoginType: loginType, AuthServerURL: authServerURL})
 	if err != nil {
-		fmt.Println("ERROR_SEMESTER_0: ", err.Error())
+		fmt.Println("ERROR_SEMESTER_LOGIN: ", err.Error())
+		js, _ := json.MarshalIndent(result, "", "\t")
+		return B2S(js)
 	}
-	var client http.Client
-	client.Jar = cookieJar
-
-	req, err := http.NewRequest(http.MethodGet, conf.MangerURL+"eams/login.action", nil)
-	if err != nil {
-		fmt.Println("ERROR_SEMESTER_1: ", err.Error())
-	}
-	resp1, err := client.Do(req)
-	if err != nil {
-		fmt.Println("ERROR_SEMESTER_2: ", err.Error())
-	}
-	defer resp1.Body.Close()
-
-	content, err := ioutil.ReadAll(resp1.Body)
-	if err != nil {
-		fmt.Println("ERROR_SEMESTER_3: ", err.Error())
-	}
-	temp := string(content)
-	if !strings.Contains(temp, "CryptoJS.SHA1(") {
-		fmt.Println("ERROR_SEMESTER_4: GET Failed")
-	}
-
-	salt := temp[strings.Index(temp, "CryptoJS.SHA1(")+15 : strings.Index(temp, "CryptoJS.SHA1(")+52]
-	bytes := sha1.Sum([]byte(salt + PassWord))
-	formValues := make(url.Values)
-	formValues.Set("username", UserName)
-	formValues.Set("password", hex.EncodeToString(bytes[:]))
-	formValues.Set("session_locale", "zh_CN")
 	time.Sleep(time.Duration(1000 * time.Millisecond))
-	req, err = http.NewRequest(http.MethodPost, conf.MangerURL+"eams/login.action", strings.NewReader(formValues.Encode()))
-	if err != nil {
-		fmt.Println("ERROR_SEMESTER_5: ", err.Error())
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:66.0) Gecko/20100101 Firefox/66.0")
-	resp2, err := client.Do(req)
-	if err != nil {
-		fmt.Println("ERROR_SEMESTER_6: ", err.Error())
-	}
-	defer resp2.Body.Close()
-
-	time.Sleep(1000 * time.Millisecond)
-	req, err = http.NewRequest(http.MethodGet, conf.MangerURL+"eams/courseTableForStd.action", nil)
+	req, err := http.NewRequest(http.MethodGet, conf.MangerURL+"eams/courseTableForStd.action", nil)
 	if err != nil {
 		fmt.Println("ERROR_SEMESTER_7: ", err.Error())
 	}
@@ -110,7 +71,7 @@ func GetSemester(UserName, PassWord string) string {
 	}
 	defer resp3.Body.Close()
 
-	content, err = ioutil.ReadAll(resp3.Body)
+	content, err := ioutil.ReadAll(resp3.Body)
 	if err != nil {
 		fmt.Println("ERROR_SEMESTER_9: ", err.Error())
 	}
@@ -164,7 +125,12 @@ func cleanJSText(text string) string {
 }
 
 func GetCourse(UserName, PassWord string) string {
-	value, found := c.Get(UserName)
+	return GetCourseWithLogin(UserName, PassWord, "", "")
+}
+
+func GetCourseWithLogin(UserName, PassWord, loginType, authServerURL string) string {
+	cacheKey := loginType + ":" + authServerURL + ":" + UserName
+	value, found := c.Get(cacheKey)
 	if found {
 		//fmt.Print("Using Cache")
 		if value.(string) != "" {
@@ -174,85 +140,19 @@ func GetCourse(UserName, PassWord string) string {
 	//readcache in there
 	// 获取用户名和密码
 	conf := ReadConfig()
-	USERNAME := UserName
-	PASSWORD := PassWord
 	myCourses = nil
 	teachers = nil
 
 	myAllCourseResult.Type = "allcourse"
-	// Cookie自动维护
-	cookieJar, err := cookiejar.New(nil)
+	client, err := CreateLoggedInClient(conf, UserName, PassWord, LoginOptions{LoginType: loginType, AuthServerURL: authServerURL})
 	if err != nil {
-		fmt.Println("ERROR_0: ", err.Error())
-		//return
-	}
-	var client http.Client
-	client.Jar = cookieJar
-
-	// 第一次请求
-	req, err := http.NewRequest(http.MethodGet, conf.MangerURL+"eams/login.action", nil)
-	if err != nil {
-		fmt.Println("ERROR_1: ", err.Error())
-		//return
-	}
-
-	resp1, err := client.Do(req)
-	if err != nil {
-		fmt.Println("ERROR_2: ", err.Error())
-		//return
-	}
-	defer resp1.Body.Close()
-
-	content, err := ioutil.ReadAll(resp1.Body)
-	if err != nil {
-		fmt.Println("ERROR_3: ", err.Error())
-		//return
-	}
-
-	temp := string(content)
-	if !strings.Contains(temp, "CryptoJS.SHA1(") {
-		fmt.Println("ERROR_4: GET Failed")
-		//return
-	}
-
-	// 对密码进行SHA1哈希
-	temp = temp[strings.Index(temp, "CryptoJS.SHA1(")+15 : strings.Index(temp, "CryptoJS.SHA1(")+52]
-	PASSWORD = temp + PASSWORD
-	bytes := sha1.Sum([]byte(PASSWORD))
-	PASSWORD = hex.EncodeToString(bytes[:])
-	formValues := make(url.Values)
-	formValues.Set("username", USERNAME)
-	formValues.Set("password", PASSWORD)
-	formValues.Set("session_locale", "zh_CN")
-	time.Sleep(time.Duration(1000 * time.Millisecond))
-	req, err = http.NewRequest(http.MethodPost, conf.MangerURL+"eams/login.action", strings.NewReader(formValues.Encode()))
-	if err != nil {
-		fmt.Println("ERROR_5: ", err.Error())
-		//return
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:66.0) Gecko/20100101 Firefox/66.0")
-	resp2, err := client.Do(req)
-	if err != nil {
-		fmt.Println("ERROR_6: ", err.Error())
-		//return
-	}
-	defer resp2.Body.Close()
-
-	content, err = ioutil.ReadAll(resp2.Body)
-	if err != nil {
-		fmt.Println("ERROR_7: ", err.Error())
-		//return
-	}
-
-	temp = string(content)
-	if !strings.Contains(temp, "<a href=\"/eams/security/my.action\" target=\"_blank\" title=\"查看详情\" style=\"color:#ffffff\">") {
-		fmt.Println(temp)
 		fmt.Println("ERROR_8: LOGIN Failed")
-		//return
+		myAllCourseResult.Data = myCourses
+		js, _ := json.MarshalIndent(myAllCourseResult, "", "\t")
+		return B2S(js)
 	}
 	time.Sleep(1000 * time.Millisecond)
-	req, err = http.NewRequest(http.MethodGet, conf.MangerURL+"eams/courseTableForStd.action", nil)
+	req, err := http.NewRequest(http.MethodGet, conf.MangerURL+"eams/courseTableForStd.action", nil)
 	if err != nil {
 		fmt.Println("ERROR_9: ", err.Error())
 		//return
@@ -265,20 +165,20 @@ func GetCourse(UserName, PassWord string) string {
 	}
 
 	defer resp3.Body.Close()
-	content, err = ioutil.ReadAll(resp3.Body)
+	content, err := ioutil.ReadAll(resp3.Body)
 	if err != nil {
 		fmt.Println("ERROR_11: ", err.Error())
 		//return
 	}
 
-	temp = string(content)
+	temp := string(content)
 	ids, semesterID, ok := getCourseTableParams(temp)
 	if !ok {
 		fmt.Println("ERROR_12: GET ids Failed")
 		//return
 	}
 
-	formValues = make(url.Values)
+	formValues := make(url.Values)
 	formValues.Set("ignoreHead", "1")
 	formValues.Set("showPrintAndExport", "1")
 	formValues.Set("setting.kind", "std")
@@ -359,15 +259,14 @@ func GetCourse(UserName, PassWord string) string {
 	myAllCourseResult.Data = myCourses
 	js, err := json.MarshalIndent(myAllCourseResult, "", "\t")
 	cachestr := B2S(js)
-	c.Set(UserName, cachestr, cache.DefaultExpiration)
-	value_check, found_check := c.Get(UserName)
+	c.Set(cacheKey, cachestr, cache.DefaultExpiration)
+	value_check, found_check := c.Get(cacheKey)
 	if found_check {
 		//fmt.Print("Using Cache")
 		if value_check.(string) == "" {
-			c.Set(UserName, cachestr, cache.DefaultExpiration)
+			c.Set(cacheKey, cachestr, cache.DefaultExpiration)
 		}
 	}
 	return cachestr
 
 }
-

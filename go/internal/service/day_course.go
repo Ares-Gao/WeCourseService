@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"encoding/json"
@@ -20,11 +20,15 @@ var thisCourse DayCourse
 var dayCourseResult DayCourseResult
 
 func GetDayCourse(UserName, PassWord string) string {
+	return GetDayCourseWithLogin(UserName, PassWord, "", "")
+}
+
+func GetDayCourseWithLogin(UserName, PassWord, loginType, authServerURL string) string {
 	var allCourses []Course
 	var tmpDayResult CourseResult
 	dayCourseResult.Type = "daycourse"
 	conf := ReadConfig()
-	var cstr string = GetCourse(UserName, PassWord)
+	var cstr string = GetCourseWithLogin(UserName, PassWord, loginType, authServerURL)
 	err := json.Unmarshal([]byte(cstr), &tmpDayResult)
 	if err != nil {
 		fmt.Println(err)
@@ -68,4 +72,3 @@ func GetWeekDay() int {
 	wd := time.Now().Weekday().String()
 	return WeekDayMap[wd]
 }
-

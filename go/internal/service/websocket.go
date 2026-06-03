@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"encoding/json"
@@ -10,10 +10,12 @@ import (
 )
 
 type userlogin struct {
-	Type     string
-	UserName string
-	PassWord string
-	Week     int
+	Type          string
+	UserName      string
+	PassWord      string
+	Week          int
+	LoginType     string
+	AuthServerURL string
 }
 
 var build string = "202011211630-Fixed"
@@ -36,32 +38,32 @@ func StartWebSocket() {
 			var u userlogin
 			json.Unmarshal([]byte(msg), &u)
 			if u.Type == "allcourse" {
-				var cstr string = GetCourse(u.UserName, u.PassWord)
+				var cstr string = GetCourseWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)
 				_ = conn.WriteMessage(msgType, []byte(cstr))
 			}
 			if u.Type == "daycourse" {
-				var cstr string = GetDayCourse(u.UserName, u.PassWord)
+				var cstr string = GetDayCourseWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)
 				_ = conn.WriteMessage(msgType, []byte(cstr))
 			}
 			if u.Type == "course" {
-				var cstr string = GetWeekCourse(u.UserName, u.PassWord, u.Week)
+				var cstr string = GetWeekCourseWithLogin(u.UserName, u.PassWord, u.Week, u.LoginType, u.AuthServerURL)
 				_ = conn.WriteMessage(msgType, []byte(cstr))
 			}
 			if u.Type == "weekcourse" {
-				var cstr string = GetWeekCourseNew(u.UserName, u.PassWord, u.Week)
+				var cstr string = GetWeekCourseNewWithLogin(u.UserName, u.PassWord, u.Week, u.LoginType, u.AuthServerURL)
 				_ = conn.WriteMessage(msgType, []byte(cstr))
 			}
 			if u.Type == "account" {
 				_ = conn.WriteMessage(msgType, []byte(GetAccount(u.UserName, u.PassWord)))
 			}
 			if u.Type == "login" {
-				_ = conn.WriteMessage(msgType, []byte(GetUserLogin(u.UserName, u.PassWord)))
+				_ = conn.WriteMessage(msgType, []byte(GetUserLoginWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)))
 			}
 			if u.Type == "week" {
 				_ = conn.WriteMessage(msgType, []byte(GetWeekTime(conf.CalendarFirst)))
 			}
 			if u.Type == "semester" {
-				_ = conn.WriteMessage(msgType, []byte(GetSemester(u.UserName, u.PassWord)))
+				_ = conn.WriteMessage(msgType, []byte(GetSemesterWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)))
 			}
 			if u.Type == "teacher" {
 				_ = conn.WriteMessage(msgType, []byte(GetTeacher(u.UserName, u.PassWord)))
@@ -82,4 +84,3 @@ func checkErr(err error) {
 	if err != nil {
 	}
 }
-
