@@ -11,6 +11,7 @@
 	"AuthServerCaptchaRetries":3,
 	"DdddOcrOnnxRuntimeLibPath":"",
 	"DdddOcrModelPath":"",
+	"DdddOcrDictPath":"",
 	"DdddOcrDetModelPath":"",
 	"DdddOcrUseCustomModel":false
 }

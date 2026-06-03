@@ -20,12 +20,13 @@ authserver 登录可以在每次 WebSocket 请求中传入 `LoginType` 和 `Auth
 	"AuthServerCaptchaRetries": 3,
 	"DdddOcrOnnxRuntimeLibPath": "C:/path/to/onnxruntime.dll",
 	"DdddOcrModelPath": "C:/path/to/common.onnx",
+	"DdddOcrDictPath": "C:/path/to/common_charset.txt",
 	"DdddOcrDetModelPath": "",
 	"DdddOcrUseCustomModel": false
 }
 ```
 
-Go 版本使用 `github.com/getcharzp/go-ocr/ddddocr` 接入 ddddocr ONNX 推理。未配置 `DdddOcrOnnxRuntimeLibPath` 和 `DdddOcrModelPath` 时不会启用自动 OCR。
+Go 版本使用 `github.com/getcharzp/go-ocr/ddddocr` 接入 ddddocr ONNX 推理。未配置 `DdddOcrOnnxRuntimeLibPath`、`DdddOcrModelPath` 和 `DdddOcrDictPath` 时不会启用自动 OCR。
 
 ## 启动
 

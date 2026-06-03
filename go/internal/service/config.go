@@ -19,6 +19,7 @@ type Config struct {
 	AuthServerCaptchaRetries  int
 	DdddOcrOnnxRuntimeLibPath string
 	DdddOcrModelPath          string
+	DdddOcrDictPath           string
 	DdddOcrDetModelPath       string
 	DdddOcrUseCustomModel     bool
 }

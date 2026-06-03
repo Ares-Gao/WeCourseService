@@ -135,6 +135,7 @@ javac -encoding UTF-8 -d out src/main/java/io/github/aresgao/wecourseservice/*.j
 	"AuthServerCaptchaRetries": 3,
 	"DdddOcrOnnxRuntimeLibPath": "",
 	"DdddOcrModelPath": "",
+	"DdddOcrDictPath": "",
 	"DdddOcrDetModelPath": "",
 	"DdddOcrUseCustomModel": false
 }
@@ -154,6 +155,7 @@ javac -encoding UTF-8 -d out src/main/java/io/github/aresgao/wecourseservice/*.j
 - `AuthServerCaptchaRetries`：验证码识别失败时的重试次数
 - `DdddOcrOnnxRuntimeLibPath`：Go 版本启用 ddddocr 时使用的 `onnxruntime.dll` / `.so` / `.dylib` 路径
 - `DdddOcrModelPath`：Go 版本 ddddocr 分类模型路径，例如 `common.onnx`
+- `DdddOcrDictPath`：Go 版本 ddddocr 字典文件路径，每行一个字符，需要与模型字符集一致
 - `DdddOcrDetModelPath`：Go 版本 ddddocr 检测模型路径，普通字符验证码可留空
 - `DdddOcrUseCustomModel`：Go 版本是否使用自训练 ddddocr 模型
 

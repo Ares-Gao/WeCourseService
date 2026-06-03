@@ -138,9 +138,13 @@ func createAuthServerLoggedInClientOnce(conf Config, username, password, loginUR
 		return nil, errors.New("authserver login page is missing pwdEncryptSalt or execution")
 	}
 
+	authBase, err := authServerBase(response.Request.URL.String())
+	if err != nil {
+		return nil, err
+	}
 	captcha := ""
-	if conf.AuthServerAutoCaptcha && needAuthServerCaptcha(html) {
-		captcha, err = recognizeAuthServerCaptcha(client, conf, response.Request.URL.String())
+	if conf.AuthServerAutoCaptcha && needAuthServerCaptcha(client, authBase, username, html) {
+		captcha, err = recognizeAuthServerCaptcha(client, conf, authBase)
 		if err != nil {
 			return nil, err
 		}
@@ -184,16 +188,12 @@ func createAuthServerLoggedInClientOnce(conf Config, username, password, loginUR
 		finalPath = response.Request.URL.Path
 	}
 	if strings.Contains(finalPath, "/authserver/login") || strings.Contains(string(content), "认证失败") || strings.Contains(strings.ToLower(string(content)), "captcha") {
-		return nil, errors.New("authserver login failed")
+		return nil, fmt.Errorf("authserver login failed: status=%d finalPath=%s loginPage=%t authFailed=%t captchaText=%t", response.StatusCode, finalPath, strings.Contains(finalPath, "/authserver/login"), strings.Contains(string(content), "认证失败"), strings.Contains(strings.ToLower(string(content)), "captcha"))
 	}
 	return client, nil
 }
 
-func recognizeAuthServerCaptcha(client *http.Client, conf Config, loginURL string) (string, error) {
-	authBase, err := authServerBase(loginURL)
-	if err != nil {
-		return "", err
-	}
+func recognizeAuthServerCaptcha(client *http.Client, conf Config, authBase string) (string, error) {
 	response, err := client.Get(authBase + "/getCaptcha.htl?" + fmt.Sprint(time.Now().UnixMilli()))
 	if err != nil {
 		return "", err
@@ -210,9 +210,18 @@ func recognizeAuthServerCaptcha(client *http.Client, conf Config, loginURL strin
 	return regexp.MustCompile(`[^0-9A-Za-z]`).ReplaceAllString(result, ""), nil
 }
 
-func needAuthServerCaptcha(html string) bool {
+func needAuthServerCaptcha(client *http.Client, authBase, username, html string) bool {
+	response, err := client.Get(authBase + "/checkNeedCaptcha.htl?username=" + url.QueryEscape(username))
+	if err == nil {
+		defer response.Body.Close()
+		content, readErr := io.ReadAll(response.Body)
+		if readErr == nil {
+			return strings.Contains(string(content), `"isNeed":true`)
+		}
+	}
 	return regexp.MustCompile(`var\s+_badCredentialsCount\s*=\s*"0"`).MatchString(html) ||
-		(strings.Contains(html, "getCaptcha.htl") && strings.Contains(html, "captchaDiv"))
+		strings.Contains(html, "captchaDiv") ||
+		strings.Contains(html, "getCaptcha.htl")
 }
 
 func authServerEncryptPassword(password, salt string) (string, error) {

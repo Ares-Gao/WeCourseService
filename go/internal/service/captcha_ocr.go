@@ -19,8 +19,8 @@ var ddddOcrCache = struct {
 }{}
 
 func SolveDdddOcrCaptcha(conf Config, imageBytes []byte) (string, error) {
-	if conf.DdddOcrOnnxRuntimeLibPath == "" || conf.DdddOcrModelPath == "" {
-		return "", errors.New("ddddocr requires DdddOcrOnnxRuntimeLibPath and DdddOcrModelPath")
+	if conf.DdddOcrOnnxRuntimeLibPath == "" || conf.DdddOcrModelPath == "" || conf.DdddOcrDictPath == "" {
+		return "", errors.New("ddddocr requires DdddOcrOnnxRuntimeLibPath, DdddOcrModelPath and DdddOcrDictPath")
 	}
 	img, _, err := image.Decode(bytes.NewReader(imageBytes))
 	if err != nil {
@@ -34,7 +34,7 @@ func SolveDdddOcrCaptcha(conf Config, imageBytes []byte) (string, error) {
 }
 
 func ddddOcrEngine(conf Config) (*ddddocr.Engine, error) {
-	key := conf.DdddOcrOnnxRuntimeLibPath + "|" + conf.DdddOcrModelPath + "|" + conf.DdddOcrDetModelPath
+	key := conf.DdddOcrOnnxRuntimeLibPath + "|" + conf.DdddOcrModelPath + "|" + conf.DdddOcrDictPath + "|" + conf.DdddOcrDetModelPath
 	ddddOcrCache.Lock()
 	defer ddddOcrCache.Unlock()
 	if ddddOcrCache.engine != nil && ddddOcrCache.key == key {
@@ -43,6 +43,7 @@ func ddddOcrEngine(conf Config) (*ddddocr.Engine, error) {
 	engine, err := ddddocr.NewEngine(ddddocr.Config{
 		OnnxRuntimeLibPath: conf.DdddOcrOnnxRuntimeLibPath,
 		ModelPath:          conf.DdddOcrModelPath,
+		DictPath:           conf.DdddOcrDictPath,
 		DetModelPath:       conf.DdddOcrDetModelPath,
 		UseCustomModel:     conf.DdddOcrUseCustomModel,
 	})
