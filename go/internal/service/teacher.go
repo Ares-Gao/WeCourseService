@@ -121,19 +121,18 @@ func GetTeacher(UserName, PassWord string) string {
 	}
 
 	temp = string(content)
-	if !strings.Contains(temp, "bg.form.addInput(form,\"ids\",\"") {
+	ids, semesterID, ok := getCourseTableParams(temp)
+	if !ok {
 		fmt.Println("ERROR_12: GET ids Failed")
 		//return
 	}
 
-	temp = temp[strings.Index(temp, "bg.form.addInput(form,\"ids\",\"")+29 : strings.Index(temp, "bg.form.addInput(form,\"ids\",\"")+50]
-	ids := temp[:strings.Index(temp, "\");")]
 	formValues = make(url.Values)
 	formValues.Set("ignoreHead", "1")
 	formValues.Set("showPrintAndExport", "1")
 	formValues.Set("setting.kind", "std")
 	formValues.Set("startWeek", "")
-	formValues.Set("semester.id", "30")
+	formValues.Set("semester.id", semesterID)
 	formValues.Set("ids", ids)
 	req, err = http.NewRequest(http.MethodPost, conf.MangerURL+"eams/courseTableForStd!courseTable.action", strings.NewReader(formValues.Encode()))
 	if err != nil {

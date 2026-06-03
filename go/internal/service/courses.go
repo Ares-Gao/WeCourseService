@@ -49,6 +49,120 @@ func B2S(bs []byte) string {
 func GetTeacherObj() []TeacherStruct {
 	return teachers
 }
+
+func GetSemester(UserName, PassWord string) string {
+	conf := ReadConfig()
+	result := SemesterResult{Type: "semester"}
+
+	cookieJar, err := cookiejar.New(nil)
+	if err != nil {
+		fmt.Println("ERROR_SEMESTER_0: ", err.Error())
+	}
+	var client http.Client
+	client.Jar = cookieJar
+
+	req, err := http.NewRequest(http.MethodGet, conf.MangerURL+"eams/login.action", nil)
+	if err != nil {
+		fmt.Println("ERROR_SEMESTER_1: ", err.Error())
+	}
+	resp1, err := client.Do(req)
+	if err != nil {
+		fmt.Println("ERROR_SEMESTER_2: ", err.Error())
+	}
+	defer resp1.Body.Close()
+
+	content, err := ioutil.ReadAll(resp1.Body)
+	if err != nil {
+		fmt.Println("ERROR_SEMESTER_3: ", err.Error())
+	}
+	temp := string(content)
+	if !strings.Contains(temp, "CryptoJS.SHA1(") {
+		fmt.Println("ERROR_SEMESTER_4: GET Failed")
+	}
+
+	salt := temp[strings.Index(temp, "CryptoJS.SHA1(")+15 : strings.Index(temp, "CryptoJS.SHA1(")+52]
+	bytes := sha1.Sum([]byte(salt + PassWord))
+	formValues := make(url.Values)
+	formValues.Set("username", UserName)
+	formValues.Set("password", hex.EncodeToString(bytes[:]))
+	formValues.Set("session_locale", "zh_CN")
+	time.Sleep(time.Duration(1000 * time.Millisecond))
+	req, err = http.NewRequest(http.MethodPost, conf.MangerURL+"eams/login.action", strings.NewReader(formValues.Encode()))
+	if err != nil {
+		fmt.Println("ERROR_SEMESTER_5: ", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:66.0) Gecko/20100101 Firefox/66.0")
+	resp2, err := client.Do(req)
+	if err != nil {
+		fmt.Println("ERROR_SEMESTER_6: ", err.Error())
+	}
+	defer resp2.Body.Close()
+
+	time.Sleep(1000 * time.Millisecond)
+	req, err = http.NewRequest(http.MethodGet, conf.MangerURL+"eams/courseTableForStd.action", nil)
+	if err != nil {
+		fmt.Println("ERROR_SEMESTER_7: ", err.Error())
+	}
+	resp3, err := client.Do(req)
+	if err != nil {
+		fmt.Println("ERROR_SEMESTER_8: ", err.Error())
+	}
+	defer resp3.Body.Close()
+
+	content, err = ioutil.ReadAll(resp3.Body)
+	if err != nil {
+		fmt.Println("ERROR_SEMESTER_9: ", err.Error())
+	}
+	ids, semesterID, ok := getCourseTableParams(string(content))
+	if ok {
+		result.Data = append(result.Data, SemesterStruct{SemesterID: semesterID, Ids: ids, Current: true})
+	}
+
+	req, err = http.NewRequest(http.MethodGet, conf.MangerURL+"eams/logout.action", nil)
+	if err == nil {
+		resp4, err := client.Do(req)
+		if err == nil {
+			defer resp4.Body.Close()
+		}
+	}
+
+	js, err := json.MarshalIndent(result, "", "\t")
+	if err != nil {
+		return ""
+	}
+	return B2S(js)
+}
+
+func getCourseTableParams(html string) (string, string, bool) {
+	idsReg := regexp.MustCompile(`bg\.form\.addInput\(form,\s*"ids",\s*"([^"]+)"`)
+	idsMatch := idsReg.FindStringSubmatch(html)
+	if len(idsMatch) < 2 {
+		return "", "", false
+	}
+
+	semesterPatterns := []string{
+		`name=["']semester\.id["'][^>]*value=["']([^"']+)["']`,
+		`semesterCalendar\(\{[^}]*value:\s*"([^"]+)"`,
+		`semesterCalendar\(\{[^}]*value:\s*'([^']+)'`,
+		`bg\.form\.addInput\(form,\s*"semester\.id",\s*"([^"]+)"`,
+	}
+	for _, pattern := range semesterPatterns {
+		semesterReg := regexp.MustCompile(pattern)
+		semesterMatch := semesterReg.FindStringSubmatch(html)
+		if len(semesterMatch) >= 2 && semesterMatch[1] != "" {
+			return idsMatch[1], semesterMatch[1], true
+		}
+	}
+	return "", "", false
+}
+
+func cleanJSText(text string) string {
+	text = strings.ReplaceAll(text, `"+periodInfo+"`, "")
+	text = strings.ReplaceAll(text, `\"`, `"`)
+	return text
+}
+
 func GetCourse(UserName, PassWord string) string {
 	value, found := c.Get(UserName)
 	if found {
@@ -158,19 +272,18 @@ func GetCourse(UserName, PassWord string) string {
 	}
 
 	temp = string(content)
-	if !strings.Contains(temp, "bg.form.addInput(form,\"ids\",\"") {
+	ids, semesterID, ok := getCourseTableParams(temp)
+	if !ok {
 		fmt.Println("ERROR_12: GET ids Failed")
 		//return
 	}
 
-	temp = temp[strings.Index(temp, "bg.form.addInput(form,\"ids\",\"")+29 : strings.Index(temp, "bg.form.addInput(form,\"ids\",\"")+50]
-	ids := temp[:strings.Index(temp, "\");")]
 	formValues = make(url.Values)
 	formValues.Set("ignoreHead", "1")
 	formValues.Set("showPrintAndExport", "1")
 	formValues.Set("setting.kind", "std")
 	formValues.Set("startWeek", "")
-	formValues.Set("semester.id", "30")
+	formValues.Set("semester.id", semesterID)
 	formValues.Set("ids", ids)
 	req, err = http.NewRequest(http.MethodPost, conf.MangerURL+"eams/courseTableForStd!courseTable.action", strings.NewReader(formValues.Encode()))
 	if err != nil {
@@ -216,7 +329,7 @@ func GetCourse(UserName, PassWord string) string {
 	for _, courseStr := range coursesStr {
 		var course Course
 		course.CourseID = courseStr[1]
-		course.CourseName = courseStr[2]
+		course.CourseName = cleanJSText(courseStr[2])
 		course.RoomID = courseStr[3]
 		course.RoomName = courseStr[4]
 		course.Weeks = courseStr[5]

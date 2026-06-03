@@ -16,6 +16,15 @@ type CourseResult struct {
 	Type string
 	Data []Course
 }
+type SemesterStruct struct {
+	SemesterID string
+	Ids        string
+	Current    bool
+}
+type SemesterResult struct {
+	Type string
+	Data []SemesterStruct
+}
 type DayCourseResult struct {
 	Type string
 	Data []DayCourse

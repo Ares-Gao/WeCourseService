@@ -8,6 +8,9 @@
 /WeCourseService.exe
 /wecourse-service
 /wecourse-service.exe
+/csharp/bin/
+/csharp/obj/
+/java/out/
 
 # Go workspace/cache files
 /go.work
@@ -21,6 +24,9 @@ __pycache__/
 /python/build/
 /python/dist/
 /python/*.egg-info/
+
+# PHP
+/php/vendor/
 
 # Local environment files
 .env

@@ -12,6 +12,9 @@ type Config struct {
 	MangerURL     string
 	CalendarFirst string
 	SocketPort    int
+	LoginType     string
+	AuthServerURL string
+	ServiceURL     string
 }
 
 func ReadConfig() Config {

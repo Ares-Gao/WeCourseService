@@ -60,6 +60,9 @@ func StartWebSocket() {
 			if u.Type == "week" {
 				_ = conn.WriteMessage(msgType, []byte(GetWeekTime(conf.CalendarFirst)))
 			}
+			if u.Type == "semester" {
+				_ = conn.WriteMessage(msgType, []byte(GetSemester(u.UserName, u.PassWord)))
+			}
 			if u.Type == "teacher" {
 				_ = conn.WriteMessage(msgType, []byte(GetTeacher(u.UserName, u.PassWord)))
 			}

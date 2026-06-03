@@ -13,6 +13,7 @@ from .supwisdom import (
     get_day_course,
     get_grade,
     get_photo,
+    get_semesters,
     get_teacher,
     get_user_login,
     get_week_course,
@@ -51,6 +52,8 @@ def dispatch(message: str) -> str:
         return get_photo(username, password)
     if request_type == "grade":
         return get_grade(username, password)
+    if request_type == "semester":
+        return get_semesters(username, password)
     return json.dumps({"Type": request_type, "Data": "unsupported request type"}, ensure_ascii=False, indent="\t")
 
 

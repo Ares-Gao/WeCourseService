@@ -7,6 +7,8 @@
 - Python 3.8+
 - `requests`
 - `websockets`
+- `pycryptodome`
+- `ddddocr`
 
 ## 安装依赖
 
@@ -37,6 +39,24 @@ Linux/macOS：
 export WECOURSE_CONFIG=../config.json
 ```
 
+### Authserver 登录
+
+统一身份认证学校可在配置中启用：
+
+```json
+{
+	"LoginType": "authserver",
+	"AuthServerURL": "https://authserver.snut.edu.cn/authserver/login?service=http%3A%2F%2Fjwgl.snut.edu.cn%2Feams%2FssoLogin.action",
+	"ServiceURL": "http://jwgl.snut.edu.cn/eams/ssoLogin.action",
+	"AuthServerAutoCaptcha": true,
+	"AuthServerCaptchaRetries": 3
+}
+```
+
+其余字段仍需保留，例如 `MangerURL` 应填写教务系统根地址。
+
+Python 版本会在 authserver 模式下自动调用 `checkNeedCaptcha.htl` 判断是否需要验证码。若需要普通图片验证码，会拉取 `getCaptcha.htl` 并使用 `ddddocr` 自动识别，失败时按 `AuthServerCaptchaRetries` 重试。
+
 ## 启动
 
 ```bash
@@ -49,6 +69,7 @@ python -m wecourse_service
 
 - `login`
 - `week`
+- `semester`
 - `teacher`
 - `account`
 - `allcourse`

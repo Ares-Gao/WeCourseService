@@ -13,6 +13,11 @@ class Config:
     MangerURL: str
     CalendarFirst: str
     SocketPort: int
+    LoginType: str = "direct"
+    AuthServerURL: str = ""
+    ServiceURL: str = ""
+    AuthServerAutoCaptcha: bool = True
+    AuthServerCaptchaRetries: int = 3
 
 
 def read_config() -> Config:

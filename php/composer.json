@@ -1,0 +1,16 @@
+{
+  "name": "ares-gao/wecourse-service",
+  "description": "PHP SDK for WeCourseService.",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.1",
+    "ext-curl": "*",
+    "ext-json": "*"
+  },
+  "autoload": {
+    "classmap": [
+      "src/"
+    ]
+  }
+}

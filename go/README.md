@@ -17,6 +17,20 @@ cd go
 go run ./cmd/wecourse-service
 ```
 
+## 支持接口
+
+- `login`
+- `week`
+- `semester`
+- `teacher`
+- `account`
+- `allcourse`
+- `course`
+- `weekcourse`
+- `daycourse`
+- `photo`
+- `grade`
+
 构建：
 
 ```bash
