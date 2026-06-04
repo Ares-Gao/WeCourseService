@@ -53,6 +53,9 @@ func StartWebSocket() {
 				var cstr string = GetWeekCourseNewWithLogin(u.UserName, u.PassWord, u.Week, u.LoginType, u.AuthServerURL)
 				_ = conn.WriteMessage(msgType, []byte(cstr))
 			}
+			if u.Type == "ics" {
+				_ = conn.WriteMessage(msgType, []byte(GetIcsWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)))
+			}
 			if u.Type == "account" {
 				_ = conn.WriteMessage(msgType, []byte(GetAccount(u.UserName, u.PassWord)))
 			}

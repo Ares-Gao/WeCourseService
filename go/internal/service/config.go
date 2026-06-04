@@ -22,6 +22,14 @@ type Config struct {
 	DdddOcrDictPath           string
 	DdddOcrDetModelPath       string
 	DdddOcrUseCustomModel     bool
+	ClassTimeSlots            []ClassTimeSlot
+	CalendarTimezone          string
+	CalendarName              string
+}
+
+type ClassTimeSlot struct {
+	Start string
+	End   string
 }
 
 func ReadConfig() Config {

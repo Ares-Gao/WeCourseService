@@ -3,6 +3,7 @@ package io.github.aresgao.wecourseservice;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.regex.Pattern;
 
 public record WeCourseConfig(
@@ -13,7 +14,10 @@ public record WeCourseConfig(
         int SocketPort,
         String LoginType,
         String AuthServerURL,
-        String ServiceURL) {
+        String ServiceURL,
+        String CalendarTimezone,
+        String CalendarName,
+        List<ClassTimeSlot> ClassTimeSlots) {
     public static WeCourseConfig load(String path) throws IOException {
         var json = Files.readString(Path.of(path));
         return new WeCourseConfig(
@@ -24,7 +28,10 @@ public record WeCourseConfig(
                 Integer.parseInt(stringValue(json, "SocketPort")),
                 optionalStringValue(json, "LoginType", "direct"),
                 optionalStringValue(json, "AuthServerURL", ""),
-                optionalStringValue(json, "ServiceURL", ""));
+                optionalStringValue(json, "ServiceURL", ""),
+                optionalStringValue(json, "CalendarTimezone", "Asia/Shanghai"),
+                optionalStringValue(json, "CalendarName", "微课表"),
+                List.of());
     }
 
     public String baseUrl() {

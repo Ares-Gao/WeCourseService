@@ -22,6 +22,7 @@ var config = WeCourseConfig.Load("../config.json");
 var client = new SupwisdomClient(config);
 var weekJson = client.GetWeekTime();
 var courses = client.GetCourse("username", "password", loginType: "authserver", authServerUrl: config.AuthServerURL);
+var ics = client.GetIcs("username", "password");
 ```
 
 如果学校启用了普通图片验证码，实现 `ICaptchaSolver` 并传入客户端：
@@ -51,6 +52,7 @@ var client = new SupwisdomClient(config, new MyCaptchaSolver());
 - 查询当前学期 ID 与课表参数
 - 获取本学期课程
 - 获取指定周课程
+- 生成 ICS 日历
 - 获取教师列表
 - 获取学籍信息
 - 获取学籍照片

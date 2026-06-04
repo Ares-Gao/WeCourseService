@@ -2,6 +2,8 @@ namespace WeCourseServiceSdk;
 
 public sealed record CourseTime(int DayOfTheWeek, int TimeOfTheDay);
 
+public sealed record ClassTimeSlot(string Start, string End);
+
 public sealed record Course(
     string CourseID,
     string CourseName,

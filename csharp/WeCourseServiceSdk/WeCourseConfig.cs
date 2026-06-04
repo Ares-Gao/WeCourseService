@@ -10,7 +10,10 @@ public sealed record WeCourseConfig(
     int SocketPort,
     string LoginType = "direct",
     string AuthServerURL = "",
-    string ServiceURL = "")
+    string ServiceURL = "",
+    string CalendarTimezone = "Asia/Shanghai",
+    string CalendarName = "微课表",
+    IReadOnlyList<ClassTimeSlot>? ClassTimeSlots = null)
 {
     public static WeCourseConfig Load(string path = "../config.json")
     {

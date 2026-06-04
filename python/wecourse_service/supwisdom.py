@@ -6,7 +6,7 @@ import json
 import random
 import re
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import sleep, time
 from typing import Any
 from urllib.parse import urlparse
@@ -27,6 +27,21 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _course_cache: dict[str, tuple[float, str, list[dict[str, Any]]]] = {}
 _ocr = None
+
+DEFAULT_CLASS_TIME_SLOTS = [
+    {"Start": "08:00", "End": "08:45"},
+    {"Start": "08:55", "End": "09:40"},
+    {"Start": "10:00", "End": "10:45"},
+    {"Start": "10:55", "End": "11:40"},
+    {"Start": "14:00", "End": "14:45"},
+    {"Start": "14:55", "End": "15:40"},
+    {"Start": "16:00", "End": "16:45"},
+    {"Start": "16:55", "End": "17:40"},
+    {"Start": "19:00", "End": "19:45"},
+    {"Start": "19:55", "End": "20:40"},
+    {"Start": "20:50", "End": "21:35"},
+    {"Start": "21:45", "End": "22:30"},
+]
 
 
 def _json_response(response_type: str, data: Any) -> str:
@@ -430,6 +445,74 @@ def get_week_course_new(username: str, password: str, week: int, login_type: str
                     }
                 )
     return _json_response("course", week_courses)
+
+
+def _escape_ical_text(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "").replace(";", "\\;").replace(",", "\\,")
+
+
+def _fold_ical_line(line: str) -> str:
+    if len(line) <= 75:
+        return line + "\r\n"
+    return "\r\n ".join(line[i : i + 75] for i in range(0, len(line), 75)) + "\r\n"
+
+
+def _course_ics(courses: list[dict[str, Any]]) -> str:
+    config = read_config()
+    slots = config.ClassTimeSlots or DEFAULT_CLASS_TIME_SLOTS
+    first_monday = datetime.strptime(config.CalendarFirst, "%Y-%m-%d")
+    timezone = config.CalendarTimezone or "Asia/Shanghai"
+    calendar_name = config.CalendarName or f"{config.SchoolName}课表"
+    now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    lines = [
+        "BEGIN:VCALENDAR\r\n",
+        "VERSION:2.0\r\n",
+        "PRODID:-//Ares-Gao//WeCourseService//CN\r\n",
+        "CALSCALE:GREGORIAN\r\n",
+        "METHOD:PUBLISH\r\n",
+        _fold_ical_line("X-WR-CALNAME:" + _escape_ical_text(calendar_name)),
+        _fold_ical_line("X-WR-TIMEZONE:" + timezone),
+    ]
+    for course in courses:
+        day_times: dict[int, list[int]] = {}
+        for item in course.get("CourseTimes", []):
+            day_times.setdefault(int(item["DayOfTheWeek"]), []).append(int(item["TimeOfTheDay"]))
+        for day, times in day_times.items():
+            times.sort()
+            start_slot, end_slot = times[0], times[-1]
+            if start_slot >= len(slots) or end_slot >= len(slots):
+                continue
+            for week_index, enabled in enumerate(course.get("Weeks", "")):
+                if week_index == 0 or enabled != "1":
+                    continue
+                date = first_monday + timedelta(days=(week_index - 1) * 7 + day)
+                start_at = datetime.strptime(date.strftime("%Y-%m-%d") + " " + slots[start_slot]["Start"], "%Y-%m-%d %H:%M")
+                end_at = datetime.strptime(date.strftime("%Y-%m-%d") + " " + slots[end_slot]["End"], "%Y-%m-%d %H:%M")
+                uid_raw = f'{course.get("CourseID", "")}-{week_index}-{day}-{start_slot}'
+                uid = re.sub(r"[^0-9A-Za-z_-]", "-", uid_raw) + "@wecourse.service"
+                lines.extend(
+                    [
+                        "BEGIN:VEVENT\r\n",
+                        _fold_ical_line("UID:" + uid),
+                        "DTSTAMP:" + now + "\r\n",
+                        _fold_ical_line("DTSTART;TZID=" + timezone + ":" + start_at.strftime("%Y%m%dT%H%M%S")),
+                        _fold_ical_line("DTEND;TZID=" + timezone + ":" + end_at.strftime("%Y%m%dT%H%M%S")),
+                        _fold_ical_line("SUMMARY:" + _escape_ical_text(course.get("CourseName", ""))),
+                        _fold_ical_line("LOCATION:" + _escape_ical_text(course.get("RoomName", ""))),
+                        _fold_ical_line(
+                            "DESCRIPTION:"
+                            + _escape_ical_text(f'CourseID: {course.get("CourseID", "")}\nRoomID: {course.get("RoomID", "")}')
+                        ),
+                        "END:VEVENT\r\n",
+                    ]
+                )
+    lines.append("END:VCALENDAR\r\n")
+    return "".join(lines)
+
+
+def get_ics(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    result = json.loads(get_course(username, password, login_type, authserver_url))
+    return _json_response("ics", _course_ics(result.get("Data", [])))
 
 
 def get_day_course(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:

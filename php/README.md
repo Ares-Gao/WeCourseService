@@ -24,6 +24,7 @@ $config = WeCourseConfig::load(__DIR__ . '/../config.json');
 $client = new SupwisdomClient($config);
 echo $client->getWeekTime();
 echo $client->getCourse('username', 'password', 'authserver', $config->AuthServerURL);
+echo $client->getIcs('username', 'password');
 ```
 
 也可以不使用 Composer，直接 require `src/WeCourseConfig.php` 和 `src/SupwisdomClient.php`。
@@ -61,6 +62,7 @@ $client = new SupwisdomClient($config, function (string $imageBytes): string {
 - 查询当前学期 ID 与课表参数
 - 获取本学期课程
 - 获取指定周课程
+- 生成 ICS 日历
 - 获取教师列表
 - 获取学籍信息
 - 获取学籍照片

@@ -29,6 +29,7 @@ var config = WeCourseConfig.load("../config.json");
 var client = new SupwisdomClient(config);
 System.out.println(client.getWeekTime());
 System.out.println(client.getCourse("username", "password", "authserver", config.AuthServerURL()));
+System.out.println(client.getIcs("username", "password"));
 ```
 
 如果学校启用了普通图片验证码，实现 `CaptchaSolver` 并传入客户端：
@@ -60,6 +61,7 @@ var client = new SupwisdomClient(config, imageBytes -> {
 - 查询当前学期 ID 与课表参数
 - 获取本学期课程
 - 获取指定周课程
+- 生成 ICS 日历
 - 获取教师列表
 - 获取学籍信息
 - 获取学籍照片

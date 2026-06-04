@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -33,6 +35,19 @@ public final class SupwisdomClient {
     private final WeCourseConfig config;
     private final CaptchaSolver captchaSolver;
     private final Map<String, CacheItem> courseCache = new HashMap<>();
+    private static final List<ClassTimeSlot> DEFAULT_CLASS_TIME_SLOTS = List.of(
+            new ClassTimeSlot("08:00", "08:45"),
+            new ClassTimeSlot("08:55", "09:40"),
+            new ClassTimeSlot("10:00", "10:45"),
+            new ClassTimeSlot("10:55", "11:40"),
+            new ClassTimeSlot("14:00", "14:45"),
+            new ClassTimeSlot("14:55", "15:40"),
+            new ClassTimeSlot("16:00", "16:45"),
+            new ClassTimeSlot("16:55", "17:40"),
+            new ClassTimeSlot("19:00", "19:45"),
+            new ClassTimeSlot("19:55", "20:40"),
+            new ClassTimeSlot("20:50", "21:35"),
+            new ClassTimeSlot("21:45", "22:30"));
 
     public SupwisdomClient(WeCourseConfig config) {
         this(config, null);
@@ -128,6 +143,64 @@ public final class SupwisdomClient {
             }
         }
         return jsonResponse("course", "[" + String.join(",", result) + "]");
+    }
+
+    public String getIcs(String username, String password) throws Exception {
+        return getIcs(username, password, "", "");
+    }
+
+    public String getIcs(String username, String password, String loginType, String authServerUrl) throws Exception {
+        getCourse(username, password, loginType, authServerUrl);
+        var cacheKey = valueOr(loginType, config.LoginType()) + ":" + authServerUrl + ":" + username;
+        var cached = courseCache.get(cacheKey);
+        return jsonResponse("ics", quote(generateIcs(cached.courses)));
+    }
+
+    public String generateIcs(List<Course> courses) {
+        var slots = config.ClassTimeSlots().isEmpty() ? DEFAULT_CLASS_TIME_SLOTS : config.ClassTimeSlots();
+        var timezone = valueOr(config.CalendarTimezone(), "Asia/Shanghai");
+        var calendarName = valueOr(config.CalendarName(), config.SchoolName() + "课表");
+        var firstMonday = LocalDate.parse(config.CalendarFirst());
+        var now = java.time.Instant.now().toString().replace("-", "").replace(":", "").replaceAll("\\.\\d+Z$", "Z");
+        var builder = new StringBuilder();
+        builder.append("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Ares-Gao//WeCourseService//CN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n");
+        builder.append(foldIcsLine("X-WR-CALNAME:" + escapeIcsText(calendarName)));
+        builder.append(foldIcsLine("X-WR-TIMEZONE:" + timezone));
+
+        for (var course : courses) {
+            var dayTimes = new HashMap<Integer, List<Integer>>();
+            for (var time : course.CourseTimes()) {
+                dayTimes.computeIfAbsent(time.DayOfTheWeek(), ignored -> new ArrayList<>()).add(time.TimeOfTheDay());
+            }
+            for (var entry : dayTimes.entrySet()) {
+                var times = entry.getValue().stream().sorted().toList();
+                var startSlot = times.get(0);
+                var endSlot = times.get(times.size() - 1);
+                if (startSlot >= slots.size() || endSlot >= slots.size()) {
+                    continue;
+                }
+                for (int weekIndex = 0; weekIndex < course.Weeks().length(); weekIndex++) {
+                    if (weekIndex == 0 || course.Weeks().charAt(weekIndex) != '1') {
+                        continue;
+                    }
+                    var date = firstMonday.plusDays((weekIndex - 1) * 7L + entry.getKey());
+                    var startAt = date.atTime(LocalTime.parse(slots.get(startSlot).Start())).format(DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss"));
+                    var endAt = date.atTime(LocalTime.parse(slots.get(endSlot).End())).format(DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss"));
+                    var uid = Pattern.compile("[^0-9A-Za-z_-]").matcher(course.CourseID() + "-" + weekIndex + "-" + entry.getKey() + "-" + startSlot).replaceAll("-") + "@wecourse.service";
+                    builder.append("BEGIN:VEVENT\r\n");
+                    builder.append(foldIcsLine("UID:" + uid));
+                    builder.append("DTSTAMP:").append(now).append("\r\n");
+                    builder.append(foldIcsLine("DTSTART;TZID=" + timezone + ":" + startAt));
+                    builder.append(foldIcsLine("DTEND;TZID=" + timezone + ":" + endAt));
+                    builder.append(foldIcsLine("SUMMARY:" + escapeIcsText(course.CourseName())));
+                    builder.append(foldIcsLine("LOCATION:" + escapeIcsText(course.RoomName())));
+                    builder.append(foldIcsLine("DESCRIPTION:" + escapeIcsText("CourseID: " + course.CourseID() + "\nRoomID: " + course.RoomID())));
+                    builder.append("END:VEVENT\r\n");
+                }
+            }
+        }
+        builder.append("END:VCALENDAR\r\n");
+        return builder.toString();
     }
 
     public String getAccount(String username, String password) throws Exception {
@@ -317,6 +390,25 @@ public final class SupwisdomClient {
 
     private static String cleanJsText(String text) {
         return text.replace("\"+periodInfo+\"", "").replace("\\\"", "\"");
+    }
+
+    private static String escapeIcsText(String value) {
+        return value.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "").replace(";", "\\;").replace(",", "\\,");
+    }
+
+    private static String foldIcsLine(String line) {
+        if (line.length() <= 75) {
+            return line + "\r\n";
+        }
+        var builder = new StringBuilder();
+        for (int index = 0; index < line.length(); index += 75) {
+            if (index > 0) {
+                builder.append("\r\n ");
+            }
+            builder.append(line, index, Math.min(index + 75, line.length()));
+        }
+        builder.append("\r\n");
+        return builder.toString();
     }
 
     private static String get(HttpClient client, String url) throws IOException, InterruptedException {

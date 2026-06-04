@@ -28,6 +28,8 @@ authserver 登录可以在每次 WebSocket 请求中传入 `LoginType` 和 `Auth
 
 Go 版本使用 `github.com/getcharzp/go-ocr/ddddocr` 接入 ddddocr ONNX 推理。未配置 `DdddOcrOnnxRuntimeLibPath`、`DdddOcrModelPath` 和 `DdddOcrDictPath` 时不会启用自动 OCR。
 
+ICS 日历生成依赖 `ClassTimeSlots`。每一项对应一节课的真实开始和结束时间，第 1 节课是数组第 0 项。请按学校实际作息修改该配置，避免生成的日历事件时间不准。
+
 ## 启动
 
 ```bash
@@ -48,6 +50,7 @@ go run ./cmd/wecourse-service
 - `daycourse`
 - `photo`
 - `grade`
+- `ics`
 
 构建：
 

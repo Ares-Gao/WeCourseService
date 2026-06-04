@@ -13,5 +13,21 @@
 	"DdddOcrModelPath":"",
 	"DdddOcrDictPath":"",
 	"DdddOcrDetModelPath":"",
-	"DdddOcrUseCustomModel":false
+	"DdddOcrUseCustomModel":false,
+	"CalendarTimezone":"Asia/Shanghai",
+	"CalendarName":"微课表",
+	"ClassTimeSlots":[
+		{"Start":"08:00","End":"08:45"},
+		{"Start":"08:55","End":"09:40"},
+		{"Start":"10:00","End":"10:45"},
+		{"Start":"10:55","End":"11:40"},
+		{"Start":"14:00","End":"14:45"},
+		{"Start":"14:55","End":"15:40"},
+		{"Start":"16:00","End":"16:45"},
+		{"Start":"16:55","End":"17:40"},
+		{"Start":"19:00","End":"19:45"},
+		{"Start":"19:55","End":"20:40"},
+		{"Start":"20:50","End":"21:35"},
+		{"Start":"21:45","End":"22:30"}
+	]
 }

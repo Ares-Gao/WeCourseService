@@ -12,6 +12,7 @@ from .supwisdom import (
     get_course,
     get_day_course,
     get_grade,
+    get_ics,
     get_photo,
     get_semesters,
     get_teacher,
@@ -42,6 +43,8 @@ def dispatch(message: str) -> str:
         return get_week_course(username, password, week, login_type=login_type, authserver_url=authserver_url)
     if request_type == "weekcourse":
         return get_week_course_new(username, password, week, login_type, authserver_url)
+    if request_type == "ics":
+        return get_ics(username, password, login_type, authserver_url)
     if request_type == "account":
         return get_account(username, password, login_type, authserver_url)
     if request_type == "login":

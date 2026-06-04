@@ -5,6 +5,20 @@ final class SupwisdomClient
     private const USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:66.0) Gecko/20100101 Firefox/66.0';
     private const LOGIN_MARKER = '<a href="/eams/security/my.action" target="_blank" title="查看详情" style="color:#ffffff">';
     private const AES_CHARS = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678';
+    private const DEFAULT_CLASS_TIME_SLOTS = [
+        ['Start' => '08:00', 'End' => '08:45'],
+        ['Start' => '08:55', 'End' => '09:40'],
+        ['Start' => '10:00', 'End' => '10:45'],
+        ['Start' => '10:55', 'End' => '11:40'],
+        ['Start' => '14:00', 'End' => '14:45'],
+        ['Start' => '14:55', 'End' => '15:40'],
+        ['Start' => '16:00', 'End' => '16:45'],
+        ['Start' => '16:55', 'End' => '17:40'],
+        ['Start' => '19:00', 'End' => '19:45'],
+        ['Start' => '19:55', 'End' => '20:40'],
+        ['Start' => '20:50', 'End' => '21:35'],
+        ['Start' => '21:45', 'End' => '22:30'],
+    ];
 
     /** @var array<string, array{time:int,json:string,teachers:array<int,array<string,string>>}> */
     private array $courseCache = [];
@@ -108,6 +122,60 @@ final class SupwisdomClient
         }
 
         return $this->jsonResponse('course', $result);
+    }
+
+    public function getIcs(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
+    {
+        $payload = json_decode($this->getCourse($username, $password, $loginType, $authServerUrl), true, 512, JSON_THROW_ON_ERROR);
+        return $this->jsonResponse('ics', $this->generateIcs($payload['Data'] ?? []));
+    }
+
+    /** @param array<int,array<string,mixed>> $courses */
+    public function generateIcs(array $courses): string
+    {
+        $slots = $this->config->ClassTimeSlots ?: self::DEFAULT_CLASS_TIME_SLOTS;
+        $timezone = $this->config->CalendarTimezone ?: 'Asia/Shanghai';
+        $calendarName = $this->config->CalendarName ?: $this->config->SchoolName . '课表';
+        $firstMonday = strtotime($this->config->CalendarFirst . ' 00:00:00');
+        $now = gmdate('Ymd\THis\Z');
+        $ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Ares-Gao//WeCourseService//CN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n";
+        $ics .= $this->foldIcsLine('X-WR-CALNAME:' . $this->escapeIcsText($calendarName));
+        $ics .= $this->foldIcsLine('X-WR-TIMEZONE:' . $timezone);
+
+        foreach ($courses as $course) {
+            $dayTimes = [];
+            foreach ($course['CourseTimes'] ?? [] as $time) {
+                $dayTimes[(int) $time['DayOfTheWeek']][] = (int) $time['TimeOfTheDay'];
+            }
+            foreach ($dayTimes as $day => $times) {
+                sort($times);
+                $startSlot = $times[0];
+                $endSlot = $times[count($times) - 1];
+                if (!isset($slots[$startSlot], $slots[$endSlot])) {
+                    continue;
+                }
+                foreach (str_split((string) ($course['Weeks'] ?? '')) as $weekIndex => $enabled) {
+                    if ($weekIndex === 0 || $enabled !== '1') {
+                        continue;
+                    }
+                    $date = strtotime('+' . (($weekIndex - 1) * 7 + $day) . ' days', $firstMonday);
+                    $startAt = date('Ymd', $date) . 'T' . str_replace(':', '', $slots[$startSlot]['Start']) . '00';
+                    $endAt = date('Ymd', $date) . 'T' . str_replace(':', '', $slots[$endSlot]['End']) . '00';
+                    $uid = preg_replace('/[^0-9A-Za-z_-]/', '-', ($course['CourseID'] ?? '') . '-' . $weekIndex . '-' . $day . '-' . $startSlot) . '@wecourse.service';
+
+                    $ics .= "BEGIN:VEVENT\r\n";
+                    $ics .= $this->foldIcsLine('UID:' . $uid);
+                    $ics .= 'DTSTAMP:' . $now . "\r\n";
+                    $ics .= $this->foldIcsLine('DTSTART;TZID=' . $timezone . ':' . $startAt);
+                    $ics .= $this->foldIcsLine('DTEND;TZID=' . $timezone . ':' . $endAt);
+                    $ics .= $this->foldIcsLine('SUMMARY:' . $this->escapeIcsText((string) ($course['CourseName'] ?? '')));
+                    $ics .= $this->foldIcsLine('LOCATION:' . $this->escapeIcsText((string) ($course['RoomName'] ?? '')));
+                    $ics .= $this->foldIcsLine('DESCRIPTION:' . $this->escapeIcsText('CourseID: ' . ($course['CourseID'] ?? '') . "\nRoomID: " . ($course['RoomID'] ?? '')));
+                    $ics .= "END:VEVENT\r\n";
+                }
+            }
+        }
+        return $ics . "END:VCALENDAR\r\n";
     }
 
     public function getAccount(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
@@ -351,6 +419,25 @@ final class SupwisdomClient
     private function cleanJsText(string $text): string
     {
         return str_replace(['"+periodInfo+"', '\\"'], ['', '"'], $text);
+    }
+
+    private function escapeIcsText(string $value): string
+    {
+        return str_replace(["\\", "\n", "\r", ';', ','], ["\\\\", "\\n", '', "\\;", "\\,"], $value);
+    }
+
+    private function foldIcsLine(string $line): string
+    {
+        if (mb_strlen($line, 'UTF-8') <= 75) {
+            return $line . "\r\n";
+        }
+        $parts = [];
+        while (mb_strlen($line, 'UTF-8') > 75) {
+            $parts[] = mb_substr($line, 0, 75, 'UTF-8');
+            $line = mb_substr($line, 75, null, 'UTF-8');
+        }
+        $parts[] = $line;
+        return implode("\r\n ", $parts) . "\r\n";
     }
 
     private function extractPasswordSalt(string $html): string

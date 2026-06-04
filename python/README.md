@@ -57,6 +57,8 @@ export WECOURSE_CONFIG=../config.json
 
 Python 版本会在 authserver 模式下自动调用 `checkNeedCaptcha.htl` 判断是否需要验证码。若需要普通图片验证码，会拉取 `getCaptcha.htl` 并使用 `ddddocr` 自动识别，失败时按 `AuthServerCaptchaRetries` 重试。
 
+ICS 日历生成会读取 `CalendarTimezone`、`CalendarName` 和 `ClassTimeSlots`。请按学校真实作息配置 `ClassTimeSlots`，避免导入日历后的课程时间不准确。
+
 `LoginType` 和 `AuthServerURL` 不必固定在全局配置中。WebSocket 请求可以按用户或学校传入同名字段覆盖默认值：
 
 ```json
@@ -90,3 +92,4 @@ python -m wecourse_service
 - `daycourse`
 - `photo`
 - `grade`
+- `ics`

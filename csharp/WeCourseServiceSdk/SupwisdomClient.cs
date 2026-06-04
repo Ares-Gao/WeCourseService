@@ -14,6 +14,21 @@ public sealed class SupwisdomClient
     private readonly WeCourseConfig _config;
     private readonly ICaptchaSolver? _captchaSolver;
     private readonly Dictionary<string, (DateTimeOffset CreatedAt, string Json, IReadOnlyList<Teacher> Teachers)> _courseCache = new();
+    private static readonly IReadOnlyList<ClassTimeSlot> DefaultClassTimeSlots =
+    [
+        new("08:00", "08:45"),
+        new("08:55", "09:40"),
+        new("10:00", "10:45"),
+        new("10:55", "11:40"),
+        new("14:00", "14:45"),
+        new("14:55", "15:40"),
+        new("16:00", "16:45"),
+        new("16:55", "17:40"),
+        new("19:00", "19:45"),
+        new("19:55", "20:40"),
+        new("20:50", "21:35"),
+        new("21:45", "22:30"),
+    ];
 
     public SupwisdomClient(WeCourseConfig config, ICaptchaSolver? captchaSolver = null)
     {
@@ -103,6 +118,62 @@ public sealed class SupwisdomClient
         }
 
         return JsonResponse("course", result);
+    }
+
+    public string GetIcs(string username, string password, string loginType = "", string authServerUrl = "")
+    {
+        var courses = JsonSerializer.Deserialize<Response<List<Course>>>(GetCourse(username, password, loginType, authServerUrl))?.Data ?? [];
+        return JsonResponse("ics", GenerateIcs(courses));
+    }
+
+    public string GenerateIcs(IReadOnlyList<Course> courses)
+    {
+        var slots = _config.ClassTimeSlots is { Count: > 0 } ? _config.ClassTimeSlots : DefaultClassTimeSlots;
+        var timezone = string.IsNullOrWhiteSpace(_config.CalendarTimezone) ? "Asia/Shanghai" : _config.CalendarTimezone;
+        var calendarName = string.IsNullOrWhiteSpace(_config.CalendarName) ? _config.SchoolName + "课表" : _config.CalendarName;
+        var firstMonday = DateTime.Parse(_config.CalendarFirst);
+        var now = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+        var builder = new StringBuilder();
+        builder.Append("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Ares-Gao//WeCourseService//CN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n");
+        builder.Append(FoldIcsLine("X-WR-CALNAME:" + EscapeIcsText(calendarName)));
+        builder.Append(FoldIcsLine("X-WR-TIMEZONE:" + timezone));
+
+        foreach (var course in courses)
+        {
+            foreach (var dayGroup in course.CourseTimes.GroupBy(item => item.DayOfTheWeek))
+            {
+                var times = dayGroup.Select(item => item.TimeOfTheDay).Order().ToList();
+                var startSlot = times[0];
+                var endSlot = times[^1];
+                if (startSlot >= slots.Count || endSlot >= slots.Count)
+                {
+                    continue;
+                }
+                for (var weekIndex = 0; weekIndex < course.Weeks.Length; weekIndex++)
+                {
+                    if (weekIndex == 0 || course.Weeks[weekIndex] != '1')
+                    {
+                        continue;
+                    }
+                    var date = firstMonday.AddDays((weekIndex - 1) * 7 + dayGroup.Key);
+                    var startAt = DateTime.Parse(date.ToString("yyyy-MM-dd") + " " + slots[startSlot].Start);
+                    var endAt = DateTime.Parse(date.ToString("yyyy-MM-dd") + " " + slots[endSlot].End);
+                    var uid = Regex.Replace($"{course.CourseID}-{weekIndex}-{dayGroup.Key}-{startSlot}", "[^0-9A-Za-z_-]", "-") + "@wecourse.service";
+
+                    builder.Append("BEGIN:VEVENT\r\n");
+                    builder.Append(FoldIcsLine("UID:" + uid));
+                    builder.Append("DTSTAMP:" + now + "\r\n");
+                    builder.Append(FoldIcsLine("DTSTART;TZID=" + timezone + ":" + startAt.ToString("yyyyMMdd'T'HHmmss")));
+                    builder.Append(FoldIcsLine("DTEND;TZID=" + timezone + ":" + endAt.ToString("yyyyMMdd'T'HHmmss")));
+                    builder.Append(FoldIcsLine("SUMMARY:" + EscapeIcsText(course.CourseName)));
+                    builder.Append(FoldIcsLine("LOCATION:" + EscapeIcsText(course.RoomName)));
+                    builder.Append(FoldIcsLine("DESCRIPTION:" + EscapeIcsText($"CourseID: {course.CourseID}\nRoomID: {course.RoomID}")));
+                    builder.Append("END:VEVENT\r\n");
+                }
+            }
+        }
+        builder.Append("END:VCALENDAR\r\n");
+        return builder.ToString();
     }
 
     public string GetAccount(string username, string password, string loginType = "", string authServerUrl = "")
@@ -334,6 +405,30 @@ public sealed class SupwisdomClient
     private static string CleanJsText(string text)
     {
         return text.Replace("\"+periodInfo+\"", "").Replace("\\\"", "\"");
+    }
+
+    private static string EscapeIcsText(string value)
+    {
+        return value.Replace("\\", "\\\\").Replace("\n", "\\n").Replace("\r", "").Replace(";", "\\;").Replace(",", "\\,");
+    }
+
+    private static string FoldIcsLine(string line)
+    {
+        if (line.Length <= 75)
+        {
+            return line + "\r\n";
+        }
+        var builder = new StringBuilder();
+        for (var index = 0; index < line.Length; index += 75)
+        {
+            if (index > 0)
+            {
+                builder.Append("\r\n ");
+            }
+            builder.Append(line.Substring(index, Math.Min(75, line.Length - index)));
+        }
+        builder.Append("\r\n");
+        return builder.ToString();
     }
 
     private static string ExtractPasswordSalt(string html)

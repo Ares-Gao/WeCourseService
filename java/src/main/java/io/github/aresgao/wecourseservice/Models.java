@@ -5,6 +5,9 @@ import java.util.List;
 record CourseTime(int DayOfTheWeek, int TimeOfTheDay) {
 }
 
+record ClassTimeSlot(String Start, String End) {
+}
+
 record Course(String CourseID, String CourseName, String RoomID, String RoomName, String Weeks, List<CourseTime> CourseTimes) {
 }
 

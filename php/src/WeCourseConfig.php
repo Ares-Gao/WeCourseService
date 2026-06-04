@@ -11,6 +11,9 @@ final class WeCourseConfig
         public readonly string $LoginType = 'direct',
         public readonly string $AuthServerURL = '',
         public readonly string $ServiceURL = '',
+        public readonly string $CalendarTimezone = 'Asia/Shanghai',
+        public readonly string $CalendarName = '微课表',
+        public readonly array $ClassTimeSlots = [],
     ) {
     }
 
@@ -26,6 +29,9 @@ final class WeCourseConfig
             $data['LoginType'] ?? 'direct',
             $data['AuthServerURL'] ?? '',
             $data['ServiceURL'] ?? '',
+            $data['CalendarTimezone'] ?? 'Asia/Shanghai',
+            $data['CalendarName'] ?? '微课表',
+            $data['ClassTimeSlots'] ?? [],
         );
     }
 
