@@ -24,9 +24,20 @@ type TeacherExam struct {
 	ExamRoom     string
 }
 
+type TeacherExamBatch struct {
+	ExamBatchID string
+	Name        string
+	Selected    bool
+}
+
 type TeacherExamResult struct {
 	Type string
 	Data []TeacherExam
+}
+
+type TeacherExamBatchResult struct {
+	Type string
+	Data []TeacherExamBatch
 }
 
 type FreeRoom struct {
@@ -114,10 +125,11 @@ func GetTeacherExamWithLogin(UserName, PassWord, loginType, authServerURL, examB
 		return B2S(js)
 	}
 	if examBatchID == "" {
-		examBatchID = selectedOptionValue(indexHTML)
+		examBatchID = selectedExamBatchID(indexHTML)
 	}
 	if examBatchID == "" {
-		examBatchID = "601"
+		js, _ := json.MarshalIndent(result, "", "\t")
+		return B2S(js)
 	}
 	examHTML, err := httpGetString(client, conf.MangerURL+"eams/teacherExamTable!examAtivities.action?examBatch.id="+url.QueryEscape(examBatchID))
 	if err != nil {
@@ -125,6 +137,24 @@ func GetTeacherExamWithLogin(UserName, PassWord, loginType, authServerURL, examB
 		return B2S(js)
 	}
 	result.Data = ParseTeacherExamHTML(examHTML)
+	js, _ := json.MarshalIndent(result, "", "\t")
+	return B2S(js)
+}
+
+func GetTeacherExamBatchesWithLogin(UserName, PassWord, loginType, authServerURL string) string {
+	result := TeacherExamBatchResult{Type: "teacherexambatch"}
+	conf := ReadConfig()
+	client, err := CreateLoggedInClient(conf, UserName, PassWord, LoginOptions{LoginType: loginType, AuthServerURL: authServerURL})
+	if err != nil {
+		js, _ := json.MarshalIndent(result, "", "\t")
+		return B2S(js)
+	}
+	indexHTML, err := httpGetString(client, conf.MangerURL+"eams/teacherExamTable.action")
+	if err != nil {
+		js, _ := json.MarshalIndent(result, "", "\t")
+		return B2S(js)
+	}
+	result.Data = ParseTeacherExamBatches(indexHTML)
 	js, _ := json.MarshalIndent(result, "", "\t")
 	return B2S(js)
 }
@@ -309,7 +339,29 @@ func sectionTitle(section string) string {
 	return ""
 }
 
-func selectedOptionValue(htmlText string) string {
+func ParseTeacherExamBatches(htmlText string) []TeacherExamBatch {
+	reg := regexp.MustCompile(`(?is)<option\s+value=["']([^"']+)["']([^>]*)>(.*?)</option>`)
+	matches := reg.FindAllStringSubmatch(htmlText, -1)
+	batches := make([]TeacherExamBatch, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 4 {
+			continue
+		}
+		batches = append(batches, TeacherExamBatch{
+			ExamBatchID: match[1],
+			Name:        cleanHTMLCell(match[3]),
+			Selected:    strings.Contains(strings.ToLower(match[2]), "selected"),
+		})
+	}
+	return batches
+}
+
+func selectedExamBatchID(htmlText string) string {
+	for _, batch := range ParseTeacherExamBatches(htmlText) {
+		if batch.Selected {
+			return batch.ExamBatchID
+		}
+	}
 	reg := regexp.MustCompile(`<option value=["']([^"']+)["'][^>]*selected`)
 	match := reg.FindStringSubmatch(htmlText)
 	if len(match) >= 2 {

@@ -76,12 +76,31 @@ final class SupwisdomClient
         $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
         try {
             $page = $this->request('GET', $this->config->baseUrl() . 'eams/teacherExamTable.action', [], $cookie);
-            if ($examBatchId === '' && preg_match('/<option value=["\']([^"\']+)["\'][^>]*selected/i', $page, $match)) {
-                $examBatchId = $match[1];
+            if ($examBatchId === '') {
+                foreach ($this->parseTeacherExamBatches($page) as $batch) {
+                    if ($batch['Selected']) {
+                        $examBatchId = $batch['ExamBatchID'];
+                        break;
+                    }
+                }
             }
-            $examBatchId = $examBatchId !== '' ? $examBatchId : '601';
+            if ($examBatchId === '') {
+                return $this->jsonResponse('teacherexam', []);
+            }
             $html = $this->request('GET', $this->config->baseUrl() . 'eams/teacherExamTable!examAtivities.action?examBatch.id=' . rawurlencode($examBatchId), [], $cookie);
             return $this->jsonResponse('teacherexam', $this->parseTeacherExams($html));
+        } finally {
+            $this->request('GET', $this->config->baseUrl() . 'eams/logout.action', [], $cookie);
+            @unlink($cookie);
+        }
+    }
+
+    public function getTeacherExamBatches(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
+    {
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
+        try {
+            $page = $this->request('GET', $this->config->baseUrl() . 'eams/teacherExamTable.action', [], $cookie);
+            return $this->jsonResponse('teacherexambatch', $this->parseTeacherExamBatches($page));
         } finally {
             $this->request('GET', $this->config->baseUrl() . 'eams/logout.action', [], $cookie);
             @unlink($cookie);
@@ -511,6 +530,16 @@ final class SupwisdomClient
             }
         }
         return $result;
+    }
+
+    private function parseTeacherExamBatches(string $html): array
+    {
+        preg_match_all('/<option\s+value=["\']([^"\']+)["\']([^>]*)>(.*?)<\/option>/is', $html, $matches, PREG_SET_ORDER);
+        return array_map(fn (array $match): array => [
+            'ExamBatchID' => $match[1],
+            'Name' => $this->cleanHtmlCell($match[3]),
+            'Selected' => str_contains(strtolower($match[2]), 'selected'),
+        ], $matches);
     }
 
     private function parseFreeRooms(string $html): array

@@ -470,11 +470,38 @@ def get_teacher_exam(
         page = session.get(base_url + "eams/teacherExamTable.action", timeout=15)
         page.raise_for_status()
         if not exam_batch_id:
-            selected = re.search(r"""<option value=["']([^"']+)["'][^>]*selected""", page.text)
-            exam_batch_id = selected.group(1) if selected else "601"
+            for batch in _parse_teacher_exam_batches(page.text):
+                if batch["Selected"]:
+                    exam_batch_id = batch["ExamBatchID"]
+                    break
+        if not exam_batch_id:
+            return _json_response("teacherexam", [])
         response = session.get(base_url + "eams/teacherExamTable!examAtivities.action?examBatch.id=" + exam_batch_id, timeout=15)
         response.raise_for_status()
         return _json_response("teacherexam", _parse_teacher_exams(response.text))
+    finally:
+        _logout(session)
+
+
+def _parse_teacher_exam_batches(html: str) -> list[dict[str, Any]]:
+    batches = []
+    for match in re.finditer(r"""(?is)<option\s+value=["']([^"']+)["']([^>]*)>(.*?)</option>""", html):
+        batches.append(
+            {
+                "ExamBatchID": match.group(1),
+                "Name": _clean_html_cell(match.group(3)),
+                "Selected": "selected" in match.group(2).lower(),
+            }
+        )
+    return batches
+
+
+def get_teacher_exam_batches(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    session = _login(username, password, login_type, authserver_url)
+    try:
+        page = session.get(_base_url() + "eams/teacherExamTable.action", timeout=15)
+        page.raise_for_status()
+        return _json_response("teacherexambatch", _parse_teacher_exam_batches(page.text))
     finally:
         _logout(session)
 

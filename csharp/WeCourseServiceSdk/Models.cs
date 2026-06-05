@@ -66,6 +66,11 @@ public sealed record TeacherExam(
     string ExamTime,
     string ExamRoom);
 
+public sealed record TeacherExamBatch(
+    string ExamBatchID,
+    string Name,
+    bool Selected);
+
 public sealed record FreeRoom(
     string Index,
     string Name,

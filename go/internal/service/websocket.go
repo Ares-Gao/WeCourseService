@@ -46,10 +46,35 @@ func StartWebSocket() {
 	conf := ReadConfig()
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := upgrader.Upgrade(w, r, nil)
+		var session userlogin
 		for {
 			msgType, msg, _ := conn.ReadMessage()
 			var u userlogin
 			json.Unmarshal([]byte(msg), &u)
+			if u.UserName == "" {
+				u.UserName = session.UserName
+			}
+			if u.PassWord == "" {
+				u.PassWord = session.PassWord
+			}
+			if u.LoginType == "" {
+				u.LoginType = session.LoginType
+			}
+			if u.AuthServerURL == "" {
+				u.AuthServerURL = session.AuthServerURL
+			}
+			if u.UserName != "" {
+				session.UserName = u.UserName
+			}
+			if u.PassWord != "" {
+				session.PassWord = u.PassWord
+			}
+			if u.LoginType != "" {
+				session.LoginType = u.LoginType
+			}
+			if u.AuthServerURL != "" {
+				session.AuthServerURL = u.AuthServerURL
+			}
 			if u.Type == "allcourse" {
 				var cstr string = GetCourseWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)
 				_ = conn.WriteMessage(msgType, []byte(cstr))
@@ -83,6 +108,9 @@ func StartWebSocket() {
 			}
 			if u.Type == "teacherexam" {
 				_ = conn.WriteMessage(msgType, []byte(GetTeacherExamWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL, u.ExamBatchID)))
+			}
+			if u.Type == "teacherexambatch" {
+				_ = conn.WriteMessage(msgType, []byte(GetTeacherExamBatchesWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)))
 			}
 			if u.Type == "freeroom" {
 				query := FreeRoomQuery{

@@ -97,11 +97,24 @@ public final class SupwisdomClient {
         var client = createLoggedInClient(username, password, loginType, authServerUrl);
         var page = get(client, config.baseUrl() + "eams/teacherExamTable.action");
         if (examBatchId == null || examBatchId.isBlank()) {
-            var selected = Pattern.compile("<option value=[\"']([^\"']+)[\"'][^>]*selected", Pattern.CASE_INSENSITIVE).matcher(page);
-            examBatchId = selected.find() ? selected.group(1) : "601";
+            for (var batch : parseTeacherExamBatches(page)) {
+                if (batch.Selected()) {
+                    examBatchId = batch.ExamBatchID();
+                    break;
+                }
+            }
+        }
+        if (examBatchId == null || examBatchId.isBlank()) {
+            return jsonResponse("teacherexam", "[]");
         }
         var html = get(client, config.baseUrl() + "eams/teacherExamTable!examAtivities.action?examBatch.id=" + URLEncoder.encode(examBatchId, StandardCharsets.UTF_8));
         return jsonResponse("teacherexam", teacherExamsJson(parseTeacherExams(html)));
+    }
+
+    public String getTeacherExamBatches(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
+        var page = get(client, config.baseUrl() + "eams/teacherExamTable.action");
+        return jsonResponse("teacherexambatch", teacherExamBatchesJson(parseTeacherExamBatches(page)));
     }
 
     public String getFreeRoom(String dateBegin, String dateEnd, String timeBegin, String timeEnd) throws Exception {
@@ -504,6 +517,15 @@ public final class SupwisdomClient {
         return result;
     }
 
+    private static List<TeacherExamBatch> parseTeacherExamBatches(String html) {
+        var result = new ArrayList<TeacherExamBatch>();
+        var matcher = Pattern.compile("(?s)<option\\s+value=[\"']([^\"']+)[\"']([^>]*)>(.*?)</option>", Pattern.CASE_INSENSITIVE).matcher(html);
+        while (matcher.find()) {
+            result.add(new TeacherExamBatch(matcher.group(1), cleanHtmlCell(matcher.group(3)), matcher.group(2).toLowerCase().contains("selected")));
+        }
+        return result;
+    }
+
     private static List<FreeRoom> parseFreeRooms(String html) {
         var result = new ArrayList<FreeRoom>();
         for (var cells : tableRows(html)) {
@@ -689,6 +711,14 @@ public final class SupwisdomClient {
         var items = new ArrayList<String>();
         for (var exam : exams) {
             items.add("{\"Category\":" + quote(exam.Category()) + ",\"CourseID\":" + quote(exam.CourseID()) + ",\"CourseName\":" + quote(exam.CourseName()) + ",\"Department\":" + quote(exam.Department()) + ",\"Credit\":" + quote(exam.Credit()) + ",\"StudentCount\":" + quote(exam.StudentCount()) + ",\"Invigilators\":" + quote(exam.Invigilators()) + ",\"ExamTime\":" + quote(exam.ExamTime()) + ",\"ExamRoom\":" + quote(exam.ExamRoom()) + "}");
+        }
+        return "[" + String.join(",", items) + "]";
+    }
+
+    private static String teacherExamBatchesJson(List<TeacherExamBatch> batches) {
+        var items = new ArrayList<String>();
+        for (var batch : batches) {
+            items.add("{\"ExamBatchID\":" + quote(batch.ExamBatchID()) + ",\"Name\":" + quote(batch.Name()) + ",\"Selected\":" + batch.Selected() + "}");
         }
         return "[" + String.join(",", items) + "]";
     }

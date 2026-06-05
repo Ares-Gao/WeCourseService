@@ -23,7 +23,7 @@ require __DIR__ . '/vendor/autoload.php';
 $config = WeCourseConfig::load(__DIR__ . '/../config.json');
 $client = new SupwisdomClient($config);
 echo $client->getWeekTime();
-echo $client->getCourse('username', 'password', 'authserver', $config->AuthServerURL);
+echo $client->getCourse('username', 'password');
 echo $client->getIcs('username', 'password');
 ```
 
@@ -61,6 +61,7 @@ $client = new SupwisdomClient($config, function (string $imageBytes): string {
 - 识别账号身份
 - 获取教师课表
 - 获取教师考试安排
+- 查询教师考试批次
 - 查询公共空闲教室
 - 获取当前教学周
 - 查询当前学期 ID 与课表参数

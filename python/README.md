@@ -85,6 +85,7 @@ python -m wecourse_service
 - `identity`
 - `teachercourse`
 - `teacherexam`
+- `teacherexambatch`
 - `freeroom`
 - `week`
 - `semester`

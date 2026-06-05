@@ -266,9 +266,11 @@ go run . -addr 127.0.0.1:9631
 
 `Type` 与请求中的 `Type` 保持一致，`Data` 为接口返回数据。以下接口章节中的“返回示例”均代表完整返回结果中的 `Data` 内容。
 
-登录方式不再由 `config.json` 强制二选一。`config.json` 只提供默认值；每次请求都可以传入 `LoginType` 决定走树维直登还是 authserver，必要时也可以传入 `AuthServerURL` 覆盖默认统一认证入口。
+登录方式不再由 `config.json` 强制二选一。`config.json` 是默认来源；正常使用时只需要传账号密码。只有当同一个服务实例临时服务不同学校、不同统一认证入口，或者需要覆盖默认登录方式时，才在请求里传 `LoginType` / `AuthServerURL`。
 
-请求级 authserver 示例：
+WebSocket 是长连接。Go 与 Python 服务会在同一条连接内记住最近一次请求里的 `UserName` / `PassWord` / `LoginType` / `AuthServerURL`，因此常规使用可以先发一次 `login` 或 `identity`，后续同连接请求只传 `Type` 和业务参数。
+
+请求级覆盖 authserver 示例：
 
 ```json
 {
@@ -382,9 +384,7 @@ go run . -addr 127.0.0.1:9631
 {
 	"Type": "teachercourse",
 	"UserName": "teacher_username",
-	"PassWord": "password",
-	"LoginType": "authserver",
-	"AuthServerURL": "https://authserver.snut.edu.cn/authserver/login?service=http%3A%2F%2Fjwgl.snut.edu.cn%2Feams%2FssoLogin.action"
+	"PassWord": "password"
 }
 ```
 
@@ -392,16 +392,48 @@ go run . -addr 127.0.0.1:9631
 
 ### 获取教师考试安排
 
-教师账号可调用该接口读取 `teacherExamTable.action`。`ExamBatchID` 可选，不传时使用页面默认选中的考试批次。
+教师账号可调用该接口读取 `teacherExamTable.action`。默认不需要传 `ExamBatchID`，系统会使用页面当前选中的考试批次。
 
 ```json
 {
 	"Type": "teacherexam",
 	"UserName": "teacher_username",
-	"PassWord": "password",
-	"ExamBatchID": "601"
+	"PassWord": "password"
 }
 ```
+
+在同一条 WebSocket 连接里，如果前面已经发过带账号密码的 `login`、`identity` 或其他登录请求，可以进一步简化为：
+
+```json
+{
+	"Type": "teacherexam"
+}
+```
+
+如确实需要切换考试批次，先调用 `teacherexambatch` 获取可选批次：
+
+```json
+{
+	"Type": "teacherexambatch"
+}
+```
+
+返回示例：
+
+```json
+{
+	"Type": "teacherexambatch",
+	"Data": [
+		{
+			"ExamBatchID": "601",
+			"Name": "期末考试",
+			"Selected": true
+		}
+	]
+}
+```
+
+然后再传 `ExamBatchID` 覆盖默认批次。
 
 返回示例：
 

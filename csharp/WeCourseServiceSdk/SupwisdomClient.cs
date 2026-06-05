@@ -75,14 +75,21 @@ public sealed class SupwisdomClient
         var page = client.GetStringAsync(_config.BaseUrl + "eams/teacherExamTable.action").GetAwaiter().GetResult();
         if (string.IsNullOrWhiteSpace(examBatchId))
         {
-            examBatchId = Regex.Match(page, "<option value=[\"']([^\"']+)[\"'][^>]*selected", RegexOptions.IgnoreCase).Groups[1].Value;
-            if (string.IsNullOrWhiteSpace(examBatchId))
-            {
-                examBatchId = "601";
-            }
+            examBatchId = ParseTeacherExamBatches(page).FirstOrDefault(batch => batch.Selected)?.ExamBatchID ?? "";
+        }
+        if (string.IsNullOrWhiteSpace(examBatchId))
+        {
+            return JsonResponse("teacherexam", Array.Empty<TeacherExam>());
         }
         var html = client.GetStringAsync(_config.BaseUrl + "eams/teacherExamTable!examAtivities.action?examBatch.id=" + Uri.EscapeDataString(examBatchId)).GetAwaiter().GetResult();
         return JsonResponse("teacherexam", ParseTeacherExams(html));
+    }
+
+    public string GetTeacherExamBatches(string username, string password, string loginType = "", string authServerUrl = "")
+    {
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
+        var page = client.GetStringAsync(_config.BaseUrl + "eams/teacherExamTable.action").GetAwaiter().GetResult();
+        return JsonResponse("teacherexambatch", ParseTeacherExamBatches(page));
     }
 
     public string GetFreeRoom(
@@ -543,6 +550,19 @@ public sealed class SupwisdomClient
                     result.Add(new TeacherExam(title, cells[0], cells[1], cells[2], cells[3], cells[4], "", cells[5], cells[6]));
                 }
             }
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<TeacherExamBatch> ParseTeacherExamBatches(string html)
+    {
+        var result = new List<TeacherExamBatch>();
+        foreach (Match option in Regex.Matches(html, @"(?is)<option\s+value=[""']([^""']+)[""']([^>]*)>(.*?)</option>"))
+        {
+            result.Add(new TeacherExamBatch(
+                option.Groups[1].Value,
+                CleanHtmlCell(option.Groups[3].Value),
+                option.Groups[2].Value.Contains("selected", StringComparison.OrdinalIgnoreCase)));
         }
         return result;
     }

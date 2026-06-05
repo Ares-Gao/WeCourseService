@@ -52,6 +52,7 @@ go run ./cmd/wecourse-service
 - `identity`
 - `teachercourse`
 - `teacherexam`
+- `teacherexambatch`
 - `freeroom`
 - `week`
 - `semester`

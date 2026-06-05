@@ -20,6 +20,7 @@ from .supwisdom import (
     get_teacher,
     get_teacher_course,
     get_teacher_exam,
+    get_teacher_exam_batches,
     get_user_login,
     get_week_course,
     get_week_course_new,
@@ -29,8 +30,14 @@ from .supwisdom import (
 BUILD = "python-0.1.0"
 
 
-def dispatch(message: str) -> str:
+def dispatch(message: str, context: dict[str, str] | None = None) -> str:
     payload: dict[str, Any] = json.loads(message)
+    if context is not None:
+        for key in ("UserName", "PassWord", "LoginType", "AuthServerURL"):
+            if payload.get(key):
+                context[key] = str(payload[key])
+            elif context.get(key):
+                payload[key] = context[key]
     request_type = payload.get("Type", "")
     username = payload.get("UserName", "")
     password = payload.get("PassWord", "")
@@ -59,6 +66,8 @@ def dispatch(message: str) -> str:
         return get_teacher_course(username, password, login_type, authserver_url)
     if request_type == "teacherexam":
         return get_teacher_exam(username, password, login_type, authserver_url, payload.get("ExamBatchID", ""))
+    if request_type == "teacherexambatch":
+        return get_teacher_exam_batches(username, password, login_type, authserver_url)
     if request_type == "freeroom":
         return get_free_room(payload)
     if request_type == "week":
@@ -75,9 +84,10 @@ def dispatch(message: str) -> str:
 
 
 async def handler(websocket) -> None:
+    context: dict[str, str] = {}
     async for message in websocket:
         try:
-            await websocket.send(await asyncio.to_thread(dispatch, message))
+            await websocket.send(await asyncio.to_thread(dispatch, message, context))
         except Exception as exc:
             await websocket.send(json.dumps({"Type": "error", "Data": str(exc)}, ensure_ascii=False, indent="\t"))
 

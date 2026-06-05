@@ -28,7 +28,7 @@ javac -encoding UTF-8 -d out src/main/java/io/github/aresgao/wecourseservice/*.j
 var config = WeCourseConfig.load("../config.json");
 var client = new SupwisdomClient(config);
 System.out.println(client.getWeekTime());
-System.out.println(client.getCourse("username", "password", "authserver", config.AuthServerURL()));
+System.out.println(client.getCourse("username", "password"));
 System.out.println(client.getIcs("username", "password"));
 ```
 
@@ -60,6 +60,7 @@ var client = new SupwisdomClient(config, imageBytes -> {
 - 识别账号身份
 - 获取教师课表
 - 获取教师考试安排
+- 查询教师考试批次
 - 查询公共空闲教室
 - 获取当前教学周
 - 查询当前学期 ID 与课表参数

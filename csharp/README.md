@@ -21,7 +21,7 @@ using WeCourseServiceSdk;
 var config = WeCourseConfig.Load("../config.json");
 var client = new SupwisdomClient(config);
 var weekJson = client.GetWeekTime();
-var courses = client.GetCourse("username", "password", loginType: "authserver", authServerUrl: config.AuthServerURL);
+var courses = client.GetCourse("username", "password");
 var ics = client.GetIcs("username", "password");
 ```
 
@@ -51,6 +51,7 @@ var client = new SupwisdomClient(config, new MyCaptchaSolver());
 - 识别账号身份
 - 获取教师课表
 - 获取教师考试安排
+- 查询教师考试批次
 - 查询公共空闲教室
 - 获取当前教学周
 - 查询当前学期 ID 与课表参数
