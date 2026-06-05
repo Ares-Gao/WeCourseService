@@ -63,6 +63,72 @@ public sealed class SupwisdomClient
         return JsonResponse("identity", ParseHomeExtIdentity(html));
     }
 
+    public string GetTeacherCourse(string username, string password, string loginType = "", string authServerUrl = "")
+    {
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
+        return JsonResponse("teachercourse", ParseCourses(GetTeacherCourseTableHtml(client)));
+    }
+
+    public string GetTeacherExam(string username, string password, string loginType = "", string authServerUrl = "", string examBatchId = "")
+    {
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
+        var page = client.GetStringAsync(_config.BaseUrl + "eams/teacherExamTable.action").GetAwaiter().GetResult();
+        if (string.IsNullOrWhiteSpace(examBatchId))
+        {
+            examBatchId = Regex.Match(page, "<option value=[\"']([^\"']+)[\"'][^>]*selected", RegexOptions.IgnoreCase).Groups[1].Value;
+            if (string.IsNullOrWhiteSpace(examBatchId))
+            {
+                examBatchId = "601";
+            }
+        }
+        var html = client.GetStringAsync(_config.BaseUrl + "eams/teacherExamTable!examAtivities.action?examBatch.id=" + Uri.EscapeDataString(examBatchId)).GetAwaiter().GetResult();
+        return JsonResponse("teacherexam", ParseTeacherExams(html));
+    }
+
+    public string GetFreeRoom(
+        string dateBegin,
+        string dateEnd = "",
+        string timeBegin = "1",
+        string timeEnd = "",
+        string roomApplyTimeType = "0",
+        string classroomType = "",
+        string campusId = "",
+        string buildingId = "",
+        string seats = "",
+        string classroomName = "")
+    {
+        if (string.IsNullOrWhiteSpace(dateBegin))
+        {
+            dateBegin = DateTime.Now.ToString("yyyy-MM-dd");
+        }
+        if (string.IsNullOrWhiteSpace(dateEnd))
+        {
+            dateEnd = dateBegin;
+        }
+        if (string.IsNullOrWhiteSpace(timeEnd))
+        {
+            timeEnd = timeBegin;
+        }
+        using var client = new HttpClient();
+        var response = client.PostAsync(_config.BaseUrl + "eams/publicFree!search.action", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["classroom.type.id"] = classroomType,
+            ["classroom.campus.id"] = campusId,
+            ["classroom.building.id"] = buildingId,
+            ["seats"] = seats,
+            ["classroom.name"] = classroomName,
+            ["cycleTime.cycleCount"] = "1",
+            ["cycleTime.cycleType"] = "1",
+            ["cycleTime.dateBegin"] = dateBegin,
+            ["cycleTime.dateEnd"] = dateEnd,
+            ["roomApplyTimeType"] = roomApplyTimeType,
+            ["timeBegin"] = timeBegin,
+            ["timeEnd"] = timeEnd,
+        })).GetAwaiter().GetResult();
+        response.EnsureSuccessStatusCode();
+        return JsonResponse("freeroom", ParseFreeRooms(response.Content.ReadAsStringAsync().GetAwaiter().GetResult()));
+    }
+
     public string GetSemesters(string username, string password, string loginType = "", string authServerUrl = "")
     {
         using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
@@ -341,6 +407,27 @@ public sealed class SupwisdomClient
         return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
     }
 
+    private string GetTeacherCourseTableHtml(HttpClient client)
+    {
+        var page = client.GetStringAsync(_config.BaseUrl + "eams/courseTableForTeacher.action").GetAwaiter().GetResult();
+        var ids = Regex.Match(page, "name=[\"']ids[\"'][^>]*value=[\"']([^\"']+)[\"']");
+        var semester = Regex.Match(page, "semesterCalendar\\(\\{[^}]*value:[\"']([^\"']+)[\"']");
+        if (!ids.Success || !semester.Success)
+        {
+            throw new InvalidOperationException("Teacher course table params not found.");
+        }
+        var response = client.PostAsync(_config.BaseUrl + "eams/courseTableForTeacher!courseTable.action", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["ignoreHead"] = "1",
+            ["setting.forSemester"] = "1",
+            ["ids"] = ids.Groups[1].Value,
+            ["setting.kind"] = "teacher",
+            ["semester.id"] = semester.Groups[1].Value,
+        })).GetAwaiter().GetResult();
+        response.EnsureSuccessStatusCode();
+        return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+    }
+
     private static IReadOnlyList<Teacher> ParseTeachers(string html)
     {
         var result = new List<Teacher>();
@@ -362,7 +449,7 @@ public sealed class SupwisdomClient
     private static IReadOnlyList<Course> ParseCourses(string html)
     {
         var result = new List<Course>();
-        var rows = Regex.Matches(html, "TaskActivity\\(actTeacherId.join\\(','\\),actTeacherName.join\\(','\\),\"(.*)\",\"(.*)\\(.*\\)\",\"(.*)\",\"(.*)\",\"(.*)\",null,null,assistantName,\"\",\"\"\\);((?:\\s*index =\\d+\\*unitCount\\+\\d+;\\s*.*\\s)+)");
+        var rows = Regex.Matches(html, "TaskActivity\\(actTeacherId(?:\\.toString\\(\\)|.join\\(','\\)),[^,]*,\"(.*)\",\"(.*)\\(.*\\)\",\"(.*)\",\"(.*)\",\"(.*)\",null,null,assistantName,\"\",\"\"\\);((?:\\s*index =\\d+\\*unitCount\\+\\d+;\\s*.*\\s)+)");
 
         foreach (Match row in rows)
         {
@@ -432,6 +519,63 @@ public sealed class SupwisdomClient
             return new Identity("teacher", "教师", "");
         }
         return new Identity("unknown", "未知", "");
+    }
+
+    private static IReadOnlyList<TeacherExam> ParseTeacherExams(string html)
+    {
+        var result = new List<TeacherExam>();
+        var sections = Regex.Split(html, "(?=<div id=\"toolbar[^\"]*\")", RegexOptions.IgnoreCase);
+        foreach (var section in sections)
+        {
+            var title = CleanHtmlCell(Regex.Match(section, "bg\\.ui\\.toolbar\\(\"[^\"]+\",'([^']*)'").Groups[1].Value);
+            foreach (var cells in TableRows(section))
+            {
+                if (cells.Count < 7 || string.IsNullOrWhiteSpace(cells[0]))
+                {
+                    continue;
+                }
+                if (cells.Count >= 8)
+                {
+                    result.Add(new TeacherExam(title, cells[0], cells[1], cells[2], cells[3], cells[5], cells[4], cells[6], cells[7]));
+                }
+                else
+                {
+                    result.Add(new TeacherExam(title, cells[0], cells[1], cells[2], cells[3], cells[4], "", cells[5], cells[6]));
+                }
+            }
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<FreeRoom> ParseFreeRooms(string html)
+    {
+        return TableRows(html)
+            .Where(cells => cells.Count >= 6 && !string.IsNullOrWhiteSpace(cells[0]))
+            .Select(cells => new FreeRoom(cells[0], cells[1], cells[2], cells[3], cells[4], cells[5]))
+            .ToList();
+    }
+
+    private static IReadOnlyList<List<string>> TableRows(string html)
+    {
+        var rows = new List<List<string>>();
+        foreach (Match row in Regex.Matches(html, "(?is)<tr[^>]*>(.*?)</tr>"))
+        {
+            var cells = Regex.Matches(row.Groups[1].Value, "(?is)<td[^>]*>(.*?)</td>")
+                .Select(cell => CleanHtmlCell(cell.Groups[1].Value))
+                .ToList();
+            if (cells.Count > 0)
+            {
+                rows.Add(cells);
+            }
+        }
+        return rows;
+    }
+
+    private static string CleanHtmlCell(string value)
+    {
+        value = Regex.Replace(value, "(?is)<[^>]+>", "");
+        value = WebUtility.HtmlDecode(value).Replace("\u00a0", " ");
+        return string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 
     private static string CleanJsText(string text)

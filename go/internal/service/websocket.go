@@ -16,6 +16,19 @@ type userlogin struct {
 	Week          int
 	LoginType     string
 	AuthServerURL string
+	ExamBatchID   string
+	DateBegin     string
+	DateEnd       string
+	TimeBegin     string
+	TimeEnd       string
+	RoomTimeType  string
+	CycleCount    string
+	CycleType     string
+	ClassroomType string
+	CampusID      string
+	BuildingID    string
+	Seats         string
+	ClassroomName string
 }
 
 var build string = "202011211630-Fixed"
@@ -64,6 +77,21 @@ func StartWebSocket() {
 			}
 			if u.Type == "identity" {
 				_ = conn.WriteMessage(msgType, []byte(GetIdentityWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)))
+			}
+			if u.Type == "teachercourse" {
+				_ = conn.WriteMessage(msgType, []byte(GetTeacherCourseWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)))
+			}
+			if u.Type == "teacherexam" {
+				_ = conn.WriteMessage(msgType, []byte(GetTeacherExamWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL, u.ExamBatchID)))
+			}
+			if u.Type == "freeroom" {
+				query := FreeRoomQuery{
+					DateBegin: u.DateBegin, DateEnd: u.DateEnd, TimeBegin: u.TimeBegin, TimeEnd: u.TimeEnd,
+					RoomApplyTimeType: u.RoomTimeType, CycleCount: u.CycleCount, CycleType: u.CycleType,
+					ClassroomTypeID: u.ClassroomType, CampusID: u.CampusID, BuildingID: u.BuildingID,
+					Seats: u.Seats, ClassroomName: u.ClassroomName,
+				}
+				_ = conn.WriteMessage(msgType, []byte(GetFreeRoom(query)))
 			}
 			if u.Type == "week" {
 				_ = conn.WriteMessage(msgType, []byte(GetWeekTime(conf.CalendarFirst)))

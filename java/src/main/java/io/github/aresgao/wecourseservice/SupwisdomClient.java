@@ -88,6 +88,53 @@ public final class SupwisdomClient {
         return jsonResponse("identity", "{\"Role\":" + quote(identity.Role()) + ",\"RoleName\":" + quote(identity.RoleName()) + ",\"UserCategoryID\":" + quote(identity.UserCategoryID()) + "}");
     }
 
+    public String getTeacherCourse(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
+        return jsonResponse("teachercourse", coursesJson(parseCourses(teacherCourseTableHtml(client))));
+    }
+
+    public String getTeacherExam(String username, String password, String loginType, String authServerUrl, String examBatchId) throws Exception {
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
+        var page = get(client, config.baseUrl() + "eams/teacherExamTable.action");
+        if (examBatchId == null || examBatchId.isBlank()) {
+            var selected = Pattern.compile("<option value=[\"']([^\"']+)[\"'][^>]*selected", Pattern.CASE_INSENSITIVE).matcher(page);
+            examBatchId = selected.find() ? selected.group(1) : "601";
+        }
+        var html = get(client, config.baseUrl() + "eams/teacherExamTable!examAtivities.action?examBatch.id=" + URLEncoder.encode(examBatchId, StandardCharsets.UTF_8));
+        return jsonResponse("teacherexam", teacherExamsJson(parseTeacherExams(html)));
+    }
+
+    public String getFreeRoom(String dateBegin, String dateEnd, String timeBegin, String timeEnd) throws Exception {
+        if (dateBegin == null || dateBegin.isBlank()) {
+            dateBegin = LocalDate.now().toString();
+        }
+        if (dateEnd == null || dateEnd.isBlank()) {
+            dateEnd = dateBegin;
+        }
+        if (timeBegin == null || timeBegin.isBlank()) {
+            timeBegin = "1";
+        }
+        if (timeEnd == null || timeEnd.isBlank()) {
+            timeEnd = timeBegin;
+        }
+        var client = HttpClient.newHttpClient();
+        var html = post(client, config.baseUrl() + "eams/publicFree!search.action", form(Map.ofEntries(
+                Map.entry("classroom.type.id", ""),
+                Map.entry("classroom.campus.id", ""),
+                Map.entry("classroom.building.id", ""),
+                Map.entry("seats", ""),
+                Map.entry("classroom.name", ""),
+                Map.entry("cycleTime.cycleCount", "1"),
+                Map.entry("cycleTime.cycleType", "1"),
+                Map.entry("cycleTime.dateBegin", dateBegin),
+                Map.entry("cycleTime.dateEnd", dateEnd),
+                Map.entry("roomApplyTimeType", "0"),
+                Map.entry("timeBegin", timeBegin),
+                Map.entry("timeEnd", timeEnd)
+        )));
+        return jsonResponse("freeroom", freeRoomsJson(parseFreeRooms(html)));
+    }
+
     public String getSemesters(String username, String password) throws Exception {
         return getSemesters(username, password, "", "");
     }
@@ -348,6 +395,22 @@ public final class SupwisdomClient {
                 "ids", params.ids())));
     }
 
+    private String teacherCourseTableHtml(HttpClient client) throws Exception {
+        var page = get(client, config.baseUrl() + "eams/courseTableForTeacher.action");
+        var ids = Pattern.compile("name=[\"']ids[\"'][^>]*value=[\"']([^\"']+)[\"']").matcher(page);
+        var semester = Pattern.compile("semesterCalendar\\(\\{[^}]*value:[\"']([^\"']+)[\"']").matcher(page);
+        if (!ids.find() || !semester.find()) {
+            throw new IllegalStateException("Teacher course table params not found.");
+        }
+        return post(client, config.baseUrl() + "eams/courseTableForTeacher!courseTable.action", form(Map.of(
+                "ignoreHead", "1",
+                "setting.forSemester", "1",
+                "ids", ids.group(1),
+                "setting.kind", "teacher",
+                "semester.id", semester.group(1)
+        )));
+    }
+
     private CourseTableParams extractCourseTableParams(String html) {
         var ids = Pattern.compile("bg\\.form\\.addInput\\(form,\\s*\"ids\",\\s*\"([^\"]+)\"").matcher(html);
         if (!ids.find()) {
@@ -384,7 +447,7 @@ public final class SupwisdomClient {
     }
 
     private List<Course> parseCourses(String html) {
-        var rows = Pattern.compile("TaskActivity\\(actTeacherId.join\\(','\\),actTeacherName.join\\(','\\),\"(.*)\",\"(.*)\\(.*\\)\",\"(.*)\",\"(.*)\",\"(.*)\",null,null,assistantName,\"\",\"\"\\);((?:\\s*index =\\d+\\*unitCount\\+\\d+;\\s*.*\\s)+)").matcher(html);
+        var rows = Pattern.compile("TaskActivity\\(actTeacherId(?:\\.toString\\(\\)|.join\\(','\\)),[^,]*,\"(.*)\",\"(.*)\\(.*\\)\",\"(.*)\",\"(.*)\",\"(.*)\",null,null,assistantName,\"\",\"\"\\);((?:\\s*index =\\d+\\*unitCount\\+\\d+;\\s*.*\\s)+)").matcher(html);
         var result = new ArrayList<Course>();
         while (rows.find()) {
             var times = new ArrayList<CourseTime>();
@@ -420,6 +483,55 @@ public final class SupwisdomClient {
             return new Identity("teacher", "教师", "");
         }
         return new Identity("unknown", "未知", "");
+    }
+
+    private static List<TeacherExam> parseTeacherExams(String html) {
+        var result = new ArrayList<TeacherExam>();
+        for (var section : html.split("(?=<div id=\\\"toolbar[^\\\"]*\\\")")) {
+            var titleMatch = Pattern.compile("bg\\.ui\\.toolbar\\(\"[^\"]+\",'([^']*)'").matcher(section);
+            var title = titleMatch.find() ? cleanHtmlCell(titleMatch.group(1)) : "";
+            for (var cells : tableRows(section)) {
+                if (cells.size() < 7 || cells.get(0).isBlank()) {
+                    continue;
+                }
+                if (cells.size() >= 8) {
+                    result.add(new TeacherExam(title, cells.get(0), cells.get(1), cells.get(2), cells.get(3), cells.get(5), cells.get(4), cells.get(6), cells.get(7)));
+                } else {
+                    result.add(new TeacherExam(title, cells.get(0), cells.get(1), cells.get(2), cells.get(3), cells.get(4), "", cells.get(5), cells.get(6)));
+                }
+            }
+        }
+        return result;
+    }
+
+    private static List<FreeRoom> parseFreeRooms(String html) {
+        var result = new ArrayList<FreeRoom>();
+        for (var cells : tableRows(html)) {
+            if (cells.size() >= 6 && !cells.get(0).isBlank()) {
+                result.add(new FreeRoom(cells.get(0), cells.get(1), cells.get(2), cells.get(3), cells.get(4), cells.get(5)));
+            }
+        }
+        return result;
+    }
+
+    private static List<List<String>> tableRows(String html) {
+        var result = new ArrayList<List<String>>();
+        var rows = Pattern.compile("(?s)<tr[^>]*>(.*?)</tr>").matcher(html);
+        while (rows.find()) {
+            var cells = new ArrayList<String>();
+            var matcher = Pattern.compile("(?s)<td[^>]*>(.*?)</td>").matcher(rows.group(1));
+            while (matcher.find()) {
+                cells.add(cleanHtmlCell(matcher.group(1)));
+            }
+            if (!cells.isEmpty()) {
+                result.add(cells);
+            }
+        }
+        return result;
+    }
+
+    private static String cleanHtmlCell(String value) {
+        return Pattern.compile("(?s)<[^>]+>").matcher(value).replaceAll("").replace("&nbsp;", " ").trim().replaceAll("\\s+", " ");
     }
 
     private static String escapeIcsText(String value) {
@@ -569,6 +681,22 @@ public final class SupwisdomClient {
         var items = new ArrayList<String>();
         for (var teacher : teachers) {
             items.add("{\"CourseID\":" + quote(teacher.CourseID()) + ",\"CourseName\":" + quote(teacher.CourseName()) + ",\"CourseCredit\":" + quote(teacher.CourseCredit()) + ",\"CourseTeacher\":" + quote(teacher.CourseTeacher()) + "}");
+        }
+        return "[" + String.join(",", items) + "]";
+    }
+
+    private static String teacherExamsJson(List<TeacherExam> exams) {
+        var items = new ArrayList<String>();
+        for (var exam : exams) {
+            items.add("{\"Category\":" + quote(exam.Category()) + ",\"CourseID\":" + quote(exam.CourseID()) + ",\"CourseName\":" + quote(exam.CourseName()) + ",\"Department\":" + quote(exam.Department()) + ",\"Credit\":" + quote(exam.Credit()) + ",\"StudentCount\":" + quote(exam.StudentCount()) + ",\"Invigilators\":" + quote(exam.Invigilators()) + ",\"ExamTime\":" + quote(exam.ExamTime()) + ",\"ExamRoom\":" + quote(exam.ExamRoom()) + "}");
+        }
+        return "[" + String.join(",", items) + "]";
+    }
+
+    private static String freeRoomsJson(List<FreeRoom> rooms) {
+        var items = new ArrayList<String>();
+        for (var room : rooms) {
+            items.add("{\"Index\":" + quote(room.Index()) + ",\"Name\":" + quote(room.Name()) + ",\"Building\":" + quote(room.Building()) + ",\"Campus\":" + quote(room.Campus()) + ",\"TypeName\":" + quote(room.TypeName()) + ",\"Capacity\":" + quote(room.Capacity()) + "}");
         }
         return "[" + String.join(",", items) + "]";
     }

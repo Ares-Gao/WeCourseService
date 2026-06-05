@@ -54,3 +54,22 @@ public sealed record Grade(
     string CourseCredit,
     string CourseGrade,
     string GradePoint);
+
+public sealed record TeacherExam(
+    string Category,
+    string CourseID,
+    string CourseName,
+    string Department,
+    string Credit,
+    string StudentCount,
+    string Invigilators,
+    string ExamTime,
+    string ExamRoom);
+
+public sealed record FreeRoom(
+    string Index,
+    string Name,
+    string Building,
+    string Campus,
+    string TypeName,
+    string Capacity);

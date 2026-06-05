@@ -58,6 +58,9 @@ var client = new SupwisdomClient(config, imageBytes -> {
 
 - 登录验证
 - 识别账号身份
+- 获取教师课表
+- 获取教师考试安排
+- 查询公共空闲教室
 - 获取当前教学周
 - 查询当前学期 ID 与课表参数
 - 获取本学期课程

@@ -14,9 +14,12 @@ from .supwisdom import (
     get_grade,
     get_ics,
     get_identity,
+    get_free_room,
     get_photo,
     get_semesters,
     get_teacher,
+    get_teacher_course,
+    get_teacher_exam,
     get_user_login,
     get_week_course,
     get_week_course_new,
@@ -52,6 +55,12 @@ def dispatch(message: str) -> str:
         return get_user_login(username, password, login_type, authserver_url)
     if request_type == "identity":
         return get_identity(username, password, login_type, authserver_url)
+    if request_type == "teachercourse":
+        return get_teacher_course(username, password, login_type, authserver_url)
+    if request_type == "teacherexam":
+        return get_teacher_exam(username, password, login_type, authserver_url, payload.get("ExamBatchID", ""))
+    if request_type == "freeroom":
+        return get_free_room(payload)
     if request_type == "week":
         return get_week_time(config.CalendarFirst)
     if request_type == "teacher":

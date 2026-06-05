@@ -312,7 +312,7 @@ def _parse_teachers(html: str) -> list[dict[str, str]]:
 
 def _parse_courses(html: str) -> list[dict[str, Any]]:
     activity_pattern = re.compile(
-        r"TaskActivity\(actTeacherId.join\(','\),actTeacherName.join\(','\),\"(.*)\","
+        r"TaskActivity\(actTeacherId(?:\.toString\(\)|.join\(','\)),[^,]*,\"(.*)\","
         r'"(.*)\(.*\)","(.*)","(.*)","(.*)",null,null,assistantName,"",""\);'
         r"((?:\s*index =\d+\*unitCount\+\d+;\s*.*\s)+)"
     )
@@ -381,6 +381,142 @@ def get_identity(username: str, password: str, login_type: str = "", authserver_
         return _json_response("identity", _parse_home_ext_identity(page.text))
     finally:
         _logout(session)
+
+
+def _teacher_course_table_html(session: requests.Session) -> str:
+    base_url = _base_url()
+    page = session.get(base_url + "eams/courseTableForTeacher.action", timeout=15)
+    page.raise_for_status()
+    ids = re.search(r"""name=["']ids["'][^>]*value=["']([^"']+)["']""", page.text)
+    semester = re.search(r"""semesterCalendar\(\{[^}]*value:["']([^"']+)["']""", page.text)
+    if not ids or not semester:
+        raise ValueError("teacher course table params not found")
+    response = session.post(
+        base_url + "eams/courseTableForTeacher!courseTable.action",
+        data={
+            "ignoreHead": "1",
+            "setting.forSemester": "1",
+            "ids": ids.group(1),
+            "setting.kind": "teacher",
+            "semester.id": semester.group(1),
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.text
+
+
+def get_teacher_course(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    session = _login(username, password, login_type, authserver_url)
+    try:
+        return _json_response("teachercourse", _parse_courses(_teacher_course_table_html(session)))
+    finally:
+        _logout(session)
+
+
+def _clean_html_cell(value: str) -> str:
+    value = re.sub(r"(?is)<[^>]+>", "", value).replace("&nbsp;", " ")
+    return " ".join(value.split())
+
+
+def _table_rows(html: str) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for row in re.finditer(r"(?is)<tr[^>]*>(.*?)</tr>", html):
+        cells = [_clean_html_cell(cell.group(1)) for cell in re.finditer(r"(?is)<td[^>]*>(.*?)</td>", row.group(1))]
+        if cells:
+            rows.append(cells)
+    return rows
+
+
+def _parse_teacher_exams(html: str) -> list[dict[str, str]]:
+    exams: list[dict[str, str]] = []
+    for section in re.split(r'(?=<div id="toolbar[^"]*")', html):
+        title = ""
+        title_match = re.search(r"""bg\.ui\.toolbar\("[^"]+",'([^']*)'""", section)
+        if title_match:
+            title = _clean_html_cell(title_match.group(1))
+        for cells in _table_rows(section):
+            if len(cells) < 7 or not cells[0]:
+                continue
+            item = {
+                "Category": title,
+                "CourseID": cells[0],
+                "CourseName": cells[1],
+                "Department": cells[2],
+                "Credit": cells[3],
+                "StudentCount": "",
+                "Invigilators": "",
+                "ExamTime": "",
+                "ExamRoom": "",
+            }
+            if len(cells) >= 8:
+                item.update({"Invigilators": cells[4], "StudentCount": cells[5], "ExamTime": cells[6], "ExamRoom": cells[7]})
+            else:
+                item.update({"StudentCount": cells[4], "ExamTime": cells[5], "ExamRoom": cells[6]})
+            exams.append(item)
+    return exams
+
+
+def get_teacher_exam(
+    username: str,
+    password: str,
+    login_type: str = "",
+    authserver_url: str = "",
+    exam_batch_id: str = "",
+) -> str:
+    session = _login(username, password, login_type, authserver_url)
+    try:
+        base_url = _base_url()
+        page = session.get(base_url + "eams/teacherExamTable.action", timeout=15)
+        page.raise_for_status()
+        if not exam_batch_id:
+            selected = re.search(r"""<option value=["']([^"']+)["'][^>]*selected""", page.text)
+            exam_batch_id = selected.group(1) if selected else "601"
+        response = session.get(base_url + "eams/teacherExamTable!examAtivities.action?examBatch.id=" + exam_batch_id, timeout=15)
+        response.raise_for_status()
+        return _json_response("teacherexam", _parse_teacher_exams(response.text))
+    finally:
+        _logout(session)
+
+
+def _parse_free_rooms(html: str) -> list[dict[str, str]]:
+    rooms = []
+    for cells in _table_rows(html):
+        if len(cells) < 6 or not cells[0]:
+            continue
+        rooms.append(
+            {
+                "Index": cells[0],
+                "Name": cells[1],
+                "Building": cells[2],
+                "Campus": cells[3],
+                "TypeName": cells[4],
+                "Capacity": cells[5],
+            }
+        )
+    return rooms
+
+
+def get_free_room(payload: dict[str, Any]) -> str:
+    date_begin = payload.get("DateBegin") or datetime.now().strftime("%Y-%m-%d")
+    time_begin = str(payload.get("TimeBegin", "1"))
+    data = {
+        "classroom.type.id": payload.get("ClassroomType", ""),
+        "classroom.campus.id": payload.get("CampusID", ""),
+        "classroom.building.id": payload.get("BuildingID", ""),
+        "seats": payload.get("Seats", ""),
+        "classroom.name": payload.get("ClassroomName", ""),
+        "cycleTime.cycleCount": payload.get("CycleCount", "1"),
+        "cycleTime.cycleType": payload.get("CycleType", "1"),
+        "cycleTime.dateBegin": date_begin,
+        "cycleTime.dateEnd": payload.get("DateEnd") or date_begin,
+        "roomApplyTimeType": payload.get("RoomTimeType", "0"),
+        "timeBegin": time_begin,
+        "timeEnd": str(payload.get("TimeEnd", time_begin)),
+    }
+    response = requests.post(_base_url() + "eams/publicFree!search.action", data=data, timeout=15)
+    response.raise_for_status()
+    return _json_response("freeroom", _parse_free_rooms(response.text))
 
 
 def get_course(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:

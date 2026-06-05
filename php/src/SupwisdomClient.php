@@ -60,6 +60,56 @@ final class SupwisdomClient
         }
     }
 
+    public function getTeacherCourse(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
+    {
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
+        try {
+            return $this->jsonResponse('teachercourse', $this->parseCourses($this->teacherCourseTableHtml($cookie)));
+        } finally {
+            $this->request('GET', $this->config->baseUrl() . 'eams/logout.action', [], $cookie);
+            @unlink($cookie);
+        }
+    }
+
+    public function getTeacherExam(string $username, string $password, string $loginType = '', string $authServerUrl = '', string $examBatchId = ''): string
+    {
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
+        try {
+            $page = $this->request('GET', $this->config->baseUrl() . 'eams/teacherExamTable.action', [], $cookie);
+            if ($examBatchId === '' && preg_match('/<option value=["\']([^"\']+)["\'][^>]*selected/i', $page, $match)) {
+                $examBatchId = $match[1];
+            }
+            $examBatchId = $examBatchId !== '' ? $examBatchId : '601';
+            $html = $this->request('GET', $this->config->baseUrl() . 'eams/teacherExamTable!examAtivities.action?examBatch.id=' . rawurlencode($examBatchId), [], $cookie);
+            return $this->jsonResponse('teacherexam', $this->parseTeacherExams($html));
+        } finally {
+            $this->request('GET', $this->config->baseUrl() . 'eams/logout.action', [], $cookie);
+            @unlink($cookie);
+        }
+    }
+
+    public function getFreeRoom(string $dateBegin, string $dateEnd = '', string $timeBegin = '1', string $timeEnd = ''): string
+    {
+        $dateBegin = $dateBegin !== '' ? $dateBegin : date('Y-m-d');
+        $dateEnd = $dateEnd !== '' ? $dateEnd : $dateBegin;
+        $timeEnd = $timeEnd !== '' ? $timeEnd : $timeBegin;
+        $html = $this->request('POST', $this->config->baseUrl() . 'eams/publicFree!search.action', [
+            'classroom.type.id' => '',
+            'classroom.campus.id' => '',
+            'classroom.building.id' => '',
+            'seats' => '',
+            'classroom.name' => '',
+            'cycleTime.cycleCount' => '1',
+            'cycleTime.cycleType' => '1',
+            'cycleTime.dateBegin' => $dateBegin,
+            'cycleTime.dateEnd' => $dateEnd,
+            'roomApplyTimeType' => '0',
+            'timeBegin' => $timeBegin,
+            'timeEnd' => $timeEnd,
+        ]);
+        return $this->jsonResponse('freeroom', $this->parseFreeRooms($html));
+    }
+
     public function getSemesters(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
         $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
@@ -336,6 +386,22 @@ final class SupwisdomClient
         ], $cookie);
     }
 
+    private function teacherCourseTableHtml(string $cookie): string
+    {
+        $page = $this->request('GET', $this->config->baseUrl() . 'eams/courseTableForTeacher.action', [], $cookie);
+        if (!preg_match('/name=["\']ids["\'][^>]*value=["\']([^"\']+)["\']/', $page, $ids)
+            || !preg_match('/semesterCalendar\(\{[^}]*value:["\']([^"\']+)["\']/', $page, $semester)) {
+            throw new RuntimeException('Teacher course table params not found.');
+        }
+        return $this->request('POST', $this->config->baseUrl() . 'eams/courseTableForTeacher!courseTable.action', [
+            'ignoreHead' => '1',
+            'setting.forSemester' => '1',
+            'ids' => $ids[1],
+            'setting.kind' => 'teacher',
+            'semester.id' => $semester[1],
+        ], $cookie);
+    }
+
     /** @return array{0:string,1:string} */
     private function extractCourseTableParams(string $html): array
     {
@@ -400,7 +466,7 @@ final class SupwisdomClient
     /** @return array<int,array<string,mixed>> */
     private function parseCourses(string $html): array
     {
-        preg_match_all('/TaskActivity\(actTeacherId.join\(\'\,\'\),actTeacherName.join\(\'\,\'\),"(.+)","(.+)\(.*\)","(.+)","(.+)","(.+)",null,null,assistantName,"",""\);((?:\s*index =\d+\*unitCount\+\d+;\s*.*\s)+)/', $html, $rows, PREG_SET_ORDER);
+        preg_match_all('/TaskActivity\(actTeacherId(?:\.toString\(\)|.join\(\'\,\'\)),[^,]*,"(.+)","(.+)\(.*\)","(.+)","(.+)","(.+)",null,null,assistantName,"",""\);((?:\s*index =\d+\*unitCount\+\d+;\s*.*\s)+)/', $html, $rows, PREG_SET_ORDER);
         $courses = [];
         foreach ($rows as $row) {
             $times = [];
@@ -419,6 +485,61 @@ final class SupwisdomClient
             ];
         }
         return $courses;
+    }
+
+    private function parseTeacherExams(string $html): array
+    {
+        $result = [];
+        foreach (preg_split('/(?=<div id="toolbar[^"]*")/i', $html) as $section) {
+            $title = preg_match('/bg\.ui\.toolbar\("[^"]+",\'([^\']*)\'/', $section, $match) ? $this->cleanHtmlCell($match[1]) : '';
+            foreach ($this->tableRows($section) as $cells) {
+                if (count($cells) < 7 || $cells[0] === '') {
+                    continue;
+                }
+                $item = ['Category' => $title, 'CourseID' => $cells[0], 'CourseName' => $cells[1], 'Department' => $cells[2], 'Credit' => $cells[3], 'StudentCount' => '', 'Invigilators' => '', 'ExamTime' => '', 'ExamRoom' => ''];
+                if (count($cells) >= 8) {
+                    $item['Invigilators'] = $cells[4];
+                    $item['StudentCount'] = $cells[5];
+                    $item['ExamTime'] = $cells[6];
+                    $item['ExamRoom'] = $cells[7];
+                } else {
+                    $item['StudentCount'] = $cells[4];
+                    $item['ExamTime'] = $cells[5];
+                    $item['ExamRoom'] = $cells[6];
+                }
+                $result[] = $item;
+            }
+        }
+        return $result;
+    }
+
+    private function parseFreeRooms(string $html): array
+    {
+        $rooms = [];
+        foreach ($this->tableRows($html) as $cells) {
+            if (count($cells) >= 6 && $cells[0] !== '') {
+                $rooms[] = ['Index' => $cells[0], 'Name' => $cells[1], 'Building' => $cells[2], 'Campus' => $cells[3], 'TypeName' => $cells[4], 'Capacity' => $cells[5]];
+            }
+        }
+        return $rooms;
+    }
+
+    private function tableRows(string $html): array
+    {
+        preg_match_all('/<tr[^>]*>(.*?)<\/tr>/is', $html, $rows);
+        $result = [];
+        foreach ($rows[1] as $row) {
+            preg_match_all('/<td[^>]*>(.*?)<\/td>/is', $row, $cells);
+            if (count($cells[1]) > 0) {
+                $result[] = array_map(fn (string $cell): string => $this->cleanHtmlCell($cell), $cells[1]);
+            }
+        }
+        return $result;
+    }
+
+    private function cleanHtmlCell(string $value): string
+    {
+        return trim(preg_replace('/\s+/', ' ', html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
     }
 
     /** @param array<string,string> $form */
