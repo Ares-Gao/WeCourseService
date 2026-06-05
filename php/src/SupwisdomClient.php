@@ -48,6 +48,18 @@ final class SupwisdomClient
         return $this->jsonResponse('week', (string) $week);
     }
 
+    public function getIdentity(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
+    {
+        $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
+        try {
+            $html = $this->request('GET', $this->config->baseUrl() . 'eams/homeExt.action', [], $cookie);
+            return $this->jsonResponse('identity', $this->parseHomeExtIdentity($html));
+        } finally {
+            $this->request('GET', $this->config->baseUrl() . 'eams/logout.action', [], $cookie);
+            @unlink($cookie);
+        }
+    }
+
     public function getSemesters(string $username, string $password, string $loginType = '', string $authServerUrl = ''): string
     {
         $cookie = $this->createLoggedInCookie($username, $password, $loginType, $authServerUrl);
@@ -344,6 +356,25 @@ final class SupwisdomClient
         }
 
         throw new RuntimeException('semester.id not found.');
+    }
+
+    private function parseHomeExtIdentity(string $html): array
+    {
+        if (preg_match('/<input[^>]+name=["\']security\.userCategoryId["\'][^>]*value=["\']([^"\']+)["\']/is', $html, $match)) {
+            $category = trim($match[1]);
+            return match ($category) {
+                '1' => ['Role' => 'student', 'RoleName' => '学生', 'UserCategoryID' => $category],
+                '2' => ['Role' => 'teacher', 'RoleName' => '教师', 'UserCategoryID' => $category],
+                default => ['Role' => 'unknown', 'RoleName' => '未知', 'UserCategoryID' => $category],
+            };
+        }
+        if (str_contains($html, 'courseTableForStd.action') || str_contains($html, 'stdDetail.action') || str_contains($html, '学生')) {
+            return ['Role' => 'student', 'RoleName' => '学生', 'UserCategoryID' => ''];
+        }
+        if (str_contains($html, 'courseTableForTeacher.action') || str_contains($html, 'teacherExamTable.action') || str_contains($html, '教师')) {
+            return ['Role' => 'teacher', 'RoleName' => '教师', 'UserCategoryID' => ''];
+        }
+        return ['Role' => 'unknown', 'RoleName' => '未知', 'UserCategoryID' => ''];
     }
 
     /** @return array<int,array<string,string>> */

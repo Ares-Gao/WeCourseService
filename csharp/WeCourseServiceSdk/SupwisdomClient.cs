@@ -56,6 +56,13 @@ public sealed class SupwisdomClient
         return JsonResponse("week", week.ToString());
     }
 
+    public string GetIdentity(string username, string password, string loginType = "", string authServerUrl = "")
+    {
+        using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
+        var html = client.GetStringAsync(_config.BaseUrl + "eams/homeExt.action").GetAwaiter().GetResult();
+        return JsonResponse("identity", ParseHomeExtIdentity(html));
+    }
+
     public string GetSemesters(string username, string password, string loginType = "", string authServerUrl = "")
     {
         using var client = CreateLoggedInClient(username, password, loginType, authServerUrl);
@@ -400,6 +407,31 @@ public sealed class SupwisdomClient
         }
 
         throw new InvalidOperationException("semester.id not found.");
+    }
+
+    private static Identity ParseHomeExtIdentity(string html)
+    {
+        var categoryMatch = Regex.Match(html, @"<input[^>]+name=[""']security\.userCategoryId[""'][^>]*value=[""']([^""']+)[""']", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        if (categoryMatch.Success)
+        {
+            var category = categoryMatch.Groups[1].Value.Trim();
+            return category switch
+            {
+                "1" => new Identity("student", "学生", category),
+                "2" => new Identity("teacher", "教师", category),
+                _ => new Identity("unknown", "未知", category),
+            };
+        }
+
+        if (html.Contains("courseTableForStd.action") || html.Contains("stdDetail.action") || html.Contains("学生"))
+        {
+            return new Identity("student", "学生", "");
+        }
+        if (html.Contains("courseTableForTeacher.action") || html.Contains("teacherExamTable.action") || html.Contains("教师"))
+        {
+            return new Identity("teacher", "教师", "");
+        }
+        return new Identity("unknown", "未知", "");
     }
 
     private static string CleanJsText(string text)

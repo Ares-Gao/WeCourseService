@@ -77,6 +77,17 @@ public final class SupwisdomClient {
         return jsonResponse("week", quote(Long.toString(week)));
     }
 
+    public String getIdentity(String username, String password) throws Exception {
+        return getIdentity(username, password, "", "");
+    }
+
+    public String getIdentity(String username, String password, String loginType, String authServerUrl) throws Exception {
+        var client = createLoggedInClient(username, password, loginType, authServerUrl);
+        var html = get(client, config.baseUrl() + "eams/homeExt.action");
+        var identity = parseHomeExtIdentity(html);
+        return jsonResponse("identity", "{\"Role\":" + quote(identity.Role()) + ",\"RoleName\":" + quote(identity.RoleName()) + ",\"UserCategoryID\":" + quote(identity.UserCategoryID()) + "}");
+    }
+
     public String getSemesters(String username, String password) throws Exception {
         return getSemesters(username, password, "", "");
     }
@@ -390,6 +401,25 @@ public final class SupwisdomClient {
 
     private static String cleanJsText(String text) {
         return text.replace("\"+periodInfo+\"", "").replace("\\\"", "\"");
+    }
+
+    private static Identity parseHomeExtIdentity(String html) {
+        var category = Pattern.compile("<input[^>]+name=[\"']security\\.userCategoryId[\"'][^>]*value=[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(html);
+        if (category.find()) {
+            var id = category.group(1).trim();
+            return switch (id) {
+                case "1" -> new Identity("student", "学生", id);
+                case "2" -> new Identity("teacher", "教师", id);
+                default -> new Identity("unknown", "未知", id);
+            };
+        }
+        if (html.contains("courseTableForStd.action") || html.contains("stdDetail.action") || html.contains("学生")) {
+            return new Identity("student", "学生", "");
+        }
+        if (html.contains("courseTableForTeacher.action") || html.contains("teacherExamTable.action") || html.contains("教师")) {
+            return new Identity("teacher", "教师", "");
+        }
+        return new Identity("unknown", "未知", "");
     }
 
     private static String escapeIcsText(String value) {

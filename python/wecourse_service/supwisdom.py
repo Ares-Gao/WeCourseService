@@ -352,6 +352,37 @@ def get_user_login(username: str, password: str, login_type: str = "", authserve
     return _json_response("login", "登录成功")
 
 
+def _parse_home_ext_identity(html: str) -> dict[str, str]:
+    identity = {"Role": "unknown", "RoleName": "未知", "UserCategoryID": ""}
+    match = re.search(r"""<input[^>]+name=["']security\.userCategoryId["'][^>]*value=["']([^"']+)["']""", html, re.I | re.S)
+    if match:
+        identity["UserCategoryID"] = match.group(1).strip()
+        if identity["UserCategoryID"] == "1":
+            identity.update({"Role": "student", "RoleName": "学生"})
+            return identity
+        if identity["UserCategoryID"] == "2":
+            identity.update({"Role": "teacher", "RoleName": "教师"})
+            return identity
+
+    if "courseTableForStd.action" in html or "stdDetail.action" in html or "学生" in html:
+        identity.update({"Role": "student", "RoleName": "学生"})
+        return identity
+    if "courseTableForTeacher.action" in html or "teacherExamTable.action" in html or "教师" in html:
+        identity.update({"Role": "teacher", "RoleName": "教师"})
+        return identity
+    return identity
+
+
+def get_identity(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
+    session = _login(username, password, login_type, authserver_url)
+    try:
+        page = session.get(_base_url() + "eams/homeExt.action", timeout=15)
+        page.raise_for_status()
+        return _json_response("identity", _parse_home_ext_identity(page.text))
+    finally:
+        _logout(session)
+
+
 def get_course(username: str, password: str, login_type: str = "", authserver_url: str = "") -> str:
     cache_key = f"{login_type or read_config().LoginType}:{authserver_url}:{username}"
     cache_item = _course_cache.get(cache_key)

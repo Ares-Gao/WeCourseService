@@ -13,3 +13,6 @@ record Course(String CourseID, String CourseName, String RoomID, String RoomName
 
 record Teacher(String CourseID, String CourseName, String CourseCredit, String CourseTeacher) {
 }
+
+record Identity(String Role, String RoleName, String UserCategoryID) {
+}

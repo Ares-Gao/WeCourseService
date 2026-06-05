@@ -82,6 +82,7 @@ python -m wecourse_service
 ## 支持接口
 
 - `login`
+- `identity`
 - `week`
 - `semester`
 - `teacher`

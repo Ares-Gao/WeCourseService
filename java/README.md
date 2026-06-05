@@ -57,6 +57,7 @@ var client = new SupwisdomClient(config, imageBytes -> {
 ## 支持能力
 
 - 登录验证
+- 识别账号身份
 - 获取当前教学周
 - 查询当前学期 ID 与课表参数
 - 获取本学期课程

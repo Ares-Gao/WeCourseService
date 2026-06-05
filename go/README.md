@@ -10,6 +10,15 @@
 
 Go 版本默认读取当前工作目录下的 `config.json`。本目录已保留一份配置文件，部署前请按学校实际信息修改。
 
+也可以使用图形化配置工具维护全部语言共用的配置：
+
+```bash
+cd ../configtool
+go run .
+```
+
+ConfigTool 会自动读取并同步保存仓库根目录的 `config.json` 和 `go/config.json`，界面支持中文/English 切换。
+
 authserver 登录可以在每次 WebSocket 请求中传入 `LoginType` 和 `AuthServerURL`，不需要把登录方式固定死在配置文件里。需要自动识别普通图片验证码时，配置 ddddocr ONNX 模型和 onnxruntime 动态库：
 
 ```json
@@ -40,6 +49,7 @@ go run ./cmd/wecourse-service
 ## 支持接口
 
 - `login`
+- `identity`
 - `week`
 - `semester`
 - `teacher`

@@ -30,6 +30,11 @@ public sealed record Semester(
     string Ids,
     bool Current);
 
+public sealed record Identity(
+    string Role,
+    string RoleName,
+    string UserCategoryID);
+
 public sealed record Student(
     string FullName,
     string EnglishName,

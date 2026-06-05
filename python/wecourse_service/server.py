@@ -13,6 +13,7 @@ from .supwisdom import (
     get_day_course,
     get_grade,
     get_ics,
+    get_identity,
     get_photo,
     get_semesters,
     get_teacher,
@@ -49,6 +50,8 @@ def dispatch(message: str) -> str:
         return get_account(username, password, login_type, authserver_url)
     if request_type == "login":
         return get_user_login(username, password, login_type, authserver_url)
+    if request_type == "identity":
+        return get_identity(username, password, login_type, authserver_url)
     if request_type == "week":
         return get_week_time(config.CalendarFirst)
     if request_type == "teacher":

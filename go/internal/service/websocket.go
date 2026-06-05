@@ -62,6 +62,9 @@ func StartWebSocket() {
 			if u.Type == "login" {
 				_ = conn.WriteMessage(msgType, []byte(GetUserLoginWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)))
 			}
+			if u.Type == "identity" {
+				_ = conn.WriteMessage(msgType, []byte(GetIdentityWithLogin(u.UserName, u.PassWord, u.LoginType, u.AuthServerURL)))
+			}
 			if u.Type == "week" {
 				_ = conn.WriteMessage(msgType, []byte(GetWeekTime(conf.CalendarFirst)))
 			}
