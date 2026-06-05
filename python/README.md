@@ -64,8 +64,6 @@ ICS 日历生成会读取 `CalendarTimezone`、`CalendarName` 和 `ClassTimeSlot
 ```json
 {
 	"Type": "allcourse",
-	"UserName": "201808830303",
-	"PassWord": "7355608",
 	"LoginType": "authserver",
 	"AuthServerURL": "https://authserver.snut.edu.cn/authserver/login?service=http%3A%2F%2Fjwgl.snut.edu.cn%2Feams%2FssoLogin.action"
 }
