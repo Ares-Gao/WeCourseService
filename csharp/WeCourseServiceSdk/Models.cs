@@ -62,6 +62,7 @@ public sealed record TeacherExam(
     string Department,
     string Credit,
     string StudentCount,
+    string ChiefExaminer,
     string Invigilators,
     string ExamTime,
     string ExamRoom);

@@ -17,7 +17,7 @@ record Teacher(String CourseID, String CourseName, String CourseCredit, String C
 record Identity(String Role, String RoleName, String UserCategoryID) {
 }
 
-record TeacherExam(String Category, String CourseID, String CourseName, String Department, String Credit, String StudentCount, String Invigilators, String ExamTime, String ExamRoom) {
+record TeacherExam(String Category, String CourseID, String CourseName, String Department, String Credit, String StudentCount, String ChiefExaminer, String Invigilators, String ExamTime, String ExamRoom) {
 }
 
 record TeacherExamBatch(String ExamBatchID, String Name, boolean Selected) {

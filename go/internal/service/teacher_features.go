@@ -13,15 +13,16 @@ import (
 )
 
 type TeacherExam struct {
-	Category     string
-	CourseID     string
-	CourseName   string
-	Department   string
-	Credit       string
-	StudentCount string
-	Invigilators string
-	ExamTime     string
-	ExamRoom     string
+	Category      string
+	CourseID      string
+	CourseName    string
+	Department    string
+	Credit        string
+	StudentCount  string
+	ChiefExaminer string
+	Invigilators  string
+	ExamTime      string
+	ExamRoom      string
 }
 
 type TeacherExamBatch struct {
@@ -251,12 +252,30 @@ func ParseTeacherExamHTML(htmlText string) []TeacherExam {
 	exams := []TeacherExam{}
 	for _, section := range sections {
 		category := sectionTitle(section)
-		for _, cells := range parseTableCells(section) {
+		headers := []string{}
+		for _, row := range parseExamTableRows(section) {
+			cells := row.Cells
+			if row.Header {
+				headers = cells
+				continue
+			}
 			if len(cells) < 7 || cells[0] == "" {
 				continue
 			}
 			exam := TeacherExam{Category: category, CourseID: cells[0], CourseName: cells[1], Department: cells[2], Credit: cells[3]}
-			if len(cells) >= 8 {
+			if len(headers) >= len(cells) {
+				exam.StudentCount = cellByHeader(cells, headers, "人数", "学生数")
+				exam.ChiefExaminer = cellByHeader(cells, headers, "主考")
+				exam.Invigilators = cellByHeader(cells, headers, "监考")
+				exam.ExamTime = cellByHeader(cells, headers, "时间", "安排")
+				exam.ExamRoom = cellByHeader(cells, headers, "地点", "考场", "教室")
+			} else if len(cells) >= 9 {
+				exam.StudentCount = cells[4]
+				exam.ChiefExaminer = cells[5]
+				exam.Invigilators = cells[6]
+				exam.ExamTime = cells[7]
+				exam.ExamRoom = cells[8]
+			} else if len(cells) >= 8 {
 				exam.Invigilators = cells[4]
 				exam.StudentCount = cells[5]
 				exam.ExamTime = cells[6]
@@ -302,6 +321,64 @@ func parseTableCells(htmlText string) [][]string {
 		rows = append(rows, cells)
 	}
 	return rows
+}
+
+type examTableRow struct {
+	Cells  []string
+	Header bool
+}
+
+func parseExamTableRows(htmlText string) []examTableRow {
+	rowReg := regexp.MustCompile(`(?is)<tr[^>]*>(.*?)</tr>`)
+	cellReg := regexp.MustCompile(`(?is)<(td|th)[^>]*>(.*?)</(?:td|th)>`)
+	rows := []examTableRow{}
+	for _, row := range rowReg.FindAllStringSubmatch(htmlText, -1) {
+		matches := cellReg.FindAllStringSubmatch(row[1], -1)
+		if len(matches) == 0 {
+			continue
+		}
+		cells := make([]string, 0, len(matches))
+		header := false
+		for _, match := range matches {
+			if strings.EqualFold(match[1], "th") {
+				header = true
+			}
+			cells = append(cells, cleanHTMLCell(match[2]))
+		}
+		if looksLikeExamHeader(cells) {
+			header = true
+		}
+		rows = append(rows, examTableRow{Cells: cells, Header: header})
+	}
+	return rows
+}
+
+func looksLikeExamHeader(cells []string) bool {
+	count := 0
+	headerNames := []string{"课程代码", "课程序号", "课程编号", "课程名称", "开课院系", "院系", "学分", "人数", "学生数", "主考", "监考", "考试时间", "考试地点", "地点", "考场", "教室"}
+	for _, cell := range cells {
+		for _, name := range headerNames {
+			if cell == name {
+				count++
+				break
+			}
+		}
+	}
+	return count >= 3
+}
+
+func cellByHeader(cells, headers []string, names ...string) string {
+	for i, header := range headers {
+		if i >= len(cells) {
+			break
+		}
+		for _, name := range names {
+			if strings.Contains(header, name) {
+				return cells[i]
+			}
+		}
+	}
+	return ""
 }
 
 func cleanHTMLCell(value string) string {

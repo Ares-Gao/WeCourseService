@@ -428,6 +428,33 @@ def _table_rows(html: str) -> list[list[str]]:
     return rows
 
 
+def _exam_table_rows(html: str) -> list[tuple[list[str], bool]]:
+    rows: list[tuple[list[str], bool]] = []
+    for row in re.finditer(r"(?is)<tr[^>]*>(.*?)</tr>", html):
+        cells = []
+        header = False
+        for cell in re.finditer(r"(?is)<(td|th)[^>]*>(.*?)</(?:td|th)>", row.group(1)):
+            if cell.group(1).lower() == "th":
+                header = True
+            cells.append(_clean_html_cell(cell.group(2)))
+        if cells:
+            header = header or _looks_like_exam_header(cells)
+            rows.append((cells, header))
+    return rows
+
+
+def _looks_like_exam_header(cells: list[str]) -> bool:
+    header_names = {"课程代码", "课程序号", "课程编号", "课程名称", "开课院系", "院系", "学分", "人数", "学生数", "主考", "监考", "考试时间", "考试地点", "地点", "考场", "教室"}
+    return sum(1 for cell in cells if cell in header_names) >= 3
+
+
+def _cell_by_header(cells: list[str], headers: list[str], *names: str) -> str:
+    for index, header in enumerate(headers[: len(cells)]):
+        if any(name in header for name in names):
+            return cells[index]
+    return ""
+
+
 def _parse_teacher_exams(html: str) -> list[dict[str, str]]:
     exams: list[dict[str, str]] = []
     for section in re.split(r'(?=<div id="toolbar[^"]*")', html):
@@ -435,7 +462,11 @@ def _parse_teacher_exams(html: str) -> list[dict[str, str]]:
         title_match = re.search(r"""bg\.ui\.toolbar\("[^"]+",'([^']*)'""", section)
         if title_match:
             title = _clean_html_cell(title_match.group(1))
-        for cells in _table_rows(section):
+        headers: list[str] = []
+        for cells, header in _exam_table_rows(section):
+            if header:
+                headers = cells
+                continue
             if len(cells) < 7 or not cells[0]:
                 continue
             item = {
@@ -445,11 +476,24 @@ def _parse_teacher_exams(html: str) -> list[dict[str, str]]:
                 "Department": cells[2],
                 "Credit": cells[3],
                 "StudentCount": "",
+                "ChiefExaminer": "",
                 "Invigilators": "",
                 "ExamTime": "",
                 "ExamRoom": "",
             }
-            if len(cells) >= 8:
+            if len(headers) >= len(cells):
+                item.update(
+                    {
+                        "StudentCount": _cell_by_header(cells, headers, "人数", "学生数"),
+                        "ChiefExaminer": _cell_by_header(cells, headers, "主考"),
+                        "Invigilators": _cell_by_header(cells, headers, "监考"),
+                        "ExamTime": _cell_by_header(cells, headers, "时间", "安排"),
+                        "ExamRoom": _cell_by_header(cells, headers, "地点", "考场", "教室"),
+                    }
+                )
+            elif len(cells) >= 9:
+                item.update({"StudentCount": cells[4], "ChiefExaminer": cells[5], "Invigilators": cells[6], "ExamTime": cells[7], "ExamRoom": cells[8]})
+            elif len(cells) >= 8:
                 item.update({"Invigilators": cells[4], "StudentCount": cells[5], "ExamTime": cells[6], "ExamRoom": cells[7]})
             else:
                 item.update({"StudentCount": cells[4], "ExamTime": cells[5], "ExamRoom": cells[6]})

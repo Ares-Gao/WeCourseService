@@ -535,20 +535,54 @@ public sealed class SupwisdomClient
         foreach (var section in sections)
         {
             var title = CleanHtmlCell(Regex.Match(section, "bg\\.ui\\.toolbar\\(\"[^\"]+\",'([^']*)'").Groups[1].Value);
-            foreach (var cells in TableRows(section))
+            var headers = new List<string>();
+            foreach (var row in ExamTableRows(section))
             {
+                var cells = row.Cells;
+                if (row.Header)
+                {
+                    headers = cells;
+                    continue;
+                }
                 if (cells.Count < 7 || string.IsNullOrWhiteSpace(cells[0]))
                 {
                     continue;
                 }
-                if (cells.Count >= 8)
+                var studentCount = "";
+                var chiefExaminer = "";
+                var invigilators = "";
+                var examTime = "";
+                var examRoom = "";
+                if (headers.Count >= cells.Count)
                 {
-                    result.Add(new TeacherExam(title, cells[0], cells[1], cells[2], cells[3], cells[5], cells[4], cells[6], cells[7]));
+                    studentCount = CellByHeader(cells, headers, "人数", "学生数");
+                    chiefExaminer = CellByHeader(cells, headers, "主考");
+                    invigilators = CellByHeader(cells, headers, "监考");
+                    examTime = CellByHeader(cells, headers, "时间", "安排");
+                    examRoom = CellByHeader(cells, headers, "地点", "考场", "教室");
+                }
+                else if (cells.Count >= 9)
+                {
+                    studentCount = cells[4];
+                    chiefExaminer = cells[5];
+                    invigilators = cells[6];
+                    examTime = cells[7];
+                    examRoom = cells[8];
+                }
+                else if (cells.Count >= 8)
+                {
+                    invigilators = cells[4];
+                    studentCount = cells[5];
+                    examTime = cells[6];
+                    examRoom = cells[7];
                 }
                 else
                 {
-                    result.Add(new TeacherExam(title, cells[0], cells[1], cells[2], cells[3], cells[4], "", cells[5], cells[6]));
+                    studentCount = cells[4];
+                    examTime = cells[5];
+                    examRoom = cells[6];
                 }
+                result.Add(new TeacherExam(title, cells[0], cells[1], cells[2], cells[3], studentCount, chiefExaminer, invigilators, examTime, examRoom));
             }
         }
         return result;
@@ -589,6 +623,50 @@ public sealed class SupwisdomClient
             }
         }
         return rows;
+    }
+
+    private sealed record ExamTableRow(List<string> Cells, bool Header);
+
+    private static IReadOnlyList<ExamTableRow> ExamTableRows(string html)
+    {
+        var rows = new List<ExamTableRow>();
+        foreach (Match row in Regex.Matches(html, "(?is)<tr[^>]*>(.*?)</tr>"))
+        {
+            var cells = new List<string>();
+            var header = false;
+            foreach (Match cell in Regex.Matches(row.Groups[1].Value, "(?is)<(td|th)[^>]*>(.*?)</(?:td|th)>"))
+            {
+                if (cell.Groups[1].Value.Equals("th", StringComparison.OrdinalIgnoreCase))
+                {
+                    header = true;
+                }
+                cells.Add(CleanHtmlCell(cell.Groups[2].Value));
+            }
+            if (cells.Count > 0)
+            {
+                header = header || LooksLikeExamHeader(cells);
+                rows.Add(new ExamTableRow(cells, header));
+            }
+        }
+        return rows;
+    }
+
+    private static bool LooksLikeExamHeader(IReadOnlyList<string> cells)
+    {
+        string[] headerNames = ["课程代码", "课程序号", "课程编号", "课程名称", "开课院系", "院系", "学分", "人数", "学生数", "主考", "监考", "考试时间", "考试地点", "地点", "考场", "教室"];
+        return cells.Count(cell => headerNames.Contains(cell)) >= 3;
+    }
+
+    private static string CellByHeader(IReadOnlyList<string> cells, IReadOnlyList<string> headers, params string[] names)
+    {
+        for (var i = 0; i < headers.Count && i < cells.Count; i++)
+        {
+            if (names.Any(name => headers[i].Contains(name, StringComparison.Ordinal)))
+            {
+                return cells[i];
+            }
+        }
+        return "";
     }
 
     private static string CleanHtmlCell(string value)

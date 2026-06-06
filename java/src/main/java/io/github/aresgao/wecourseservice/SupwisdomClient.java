@@ -503,15 +503,44 @@ public final class SupwisdomClient {
         for (var section : html.split("(?=<div id=\\\"toolbar[^\\\"]*\\\")")) {
             var titleMatch = Pattern.compile("bg\\.ui\\.toolbar\\(\"[^\"]+\",'([^']*)'").matcher(section);
             var title = titleMatch.find() ? cleanHtmlCell(titleMatch.group(1)) : "";
-            for (var cells : tableRows(section)) {
+            var headers = new ArrayList<String>();
+            for (var row : examTableRows(section)) {
+                var cells = row.cells();
+                if (row.header()) {
+                    headers = new ArrayList<>(cells);
+                    continue;
+                }
                 if (cells.size() < 7 || cells.get(0).isBlank()) {
                     continue;
                 }
-                if (cells.size() >= 8) {
-                    result.add(new TeacherExam(title, cells.get(0), cells.get(1), cells.get(2), cells.get(3), cells.get(5), cells.get(4), cells.get(6), cells.get(7)));
+                String studentCount = "";
+                String chiefExaminer = "";
+                String invigilators = "";
+                String examTime = "";
+                String examRoom = "";
+                if (headers.size() >= cells.size()) {
+                    studentCount = cellByHeader(cells, headers, "人数", "学生数");
+                    chiefExaminer = cellByHeader(cells, headers, "主考");
+                    invigilators = cellByHeader(cells, headers, "监考");
+                    examTime = cellByHeader(cells, headers, "时间", "安排");
+                    examRoom = cellByHeader(cells, headers, "地点", "考场", "教室");
+                } else if (cells.size() >= 9) {
+                    studentCount = cells.get(4);
+                    chiefExaminer = cells.get(5);
+                    invigilators = cells.get(6);
+                    examTime = cells.get(7);
+                    examRoom = cells.get(8);
+                } else if (cells.size() >= 8) {
+                    invigilators = cells.get(4);
+                    studentCount = cells.get(5);
+                    examTime = cells.get(6);
+                    examRoom = cells.get(7);
                 } else {
-                    result.add(new TeacherExam(title, cells.get(0), cells.get(1), cells.get(2), cells.get(3), cells.get(4), "", cells.get(5), cells.get(6)));
+                    studentCount = cells.get(4);
+                    examTime = cells.get(5);
+                    examRoom = cells.get(6);
                 }
+                result.add(new TeacherExam(title, cells.get(0), cells.get(1), cells.get(2), cells.get(3), studentCount, chiefExaminer, invigilators, examTime, examRoom));
             }
         }
         return result;
@@ -550,6 +579,52 @@ public final class SupwisdomClient {
             }
         }
         return result;
+    }
+
+    private record ExamTableRow(List<String> cells, boolean header) {
+    }
+
+    private static List<ExamTableRow> examTableRows(String html) {
+        var result = new ArrayList<ExamTableRow>();
+        var rows = Pattern.compile("(?s)<tr[^>]*>(.*?)</tr>").matcher(html);
+        while (rows.find()) {
+            var cells = new ArrayList<String>();
+            var header = false;
+            var matcher = Pattern.compile("(?s)<(td|th)[^>]*>(.*?)</(?:td|th)>", Pattern.CASE_INSENSITIVE).matcher(rows.group(1));
+            while (matcher.find()) {
+                if ("th".equalsIgnoreCase(matcher.group(1))) {
+                    header = true;
+                }
+                cells.add(cleanHtmlCell(matcher.group(2)));
+            }
+            if (!cells.isEmpty()) {
+                header = header || looksLikeExamHeader(cells);
+                result.add(new ExamTableRow(cells, header));
+            }
+        }
+        return result;
+    }
+
+    private static boolean looksLikeExamHeader(List<String> cells) {
+        var headerNames = List.of("课程代码", "课程序号", "课程编号", "课程名称", "开课院系", "院系", "学分", "人数", "学生数", "主考", "监考", "考试时间", "考试地点", "地点", "考场", "教室");
+        var count = 0;
+        for (var cell : cells) {
+            if (headerNames.contains(cell)) {
+                count++;
+            }
+        }
+        return count >= 3;
+    }
+
+    private static String cellByHeader(List<String> cells, List<String> headers, String... names) {
+        for (var i = 0; i < headers.size() && i < cells.size(); i++) {
+            for (var name : names) {
+                if (headers.get(i).contains(name)) {
+                    return cells.get(i);
+                }
+            }
+        }
+        return "";
     }
 
     private static String cleanHtmlCell(String value) {
@@ -710,7 +785,7 @@ public final class SupwisdomClient {
     private static String teacherExamsJson(List<TeacherExam> exams) {
         var items = new ArrayList<String>();
         for (var exam : exams) {
-            items.add("{\"Category\":" + quote(exam.Category()) + ",\"CourseID\":" + quote(exam.CourseID()) + ",\"CourseName\":" + quote(exam.CourseName()) + ",\"Department\":" + quote(exam.Department()) + ",\"Credit\":" + quote(exam.Credit()) + ",\"StudentCount\":" + quote(exam.StudentCount()) + ",\"Invigilators\":" + quote(exam.Invigilators()) + ",\"ExamTime\":" + quote(exam.ExamTime()) + ",\"ExamRoom\":" + quote(exam.ExamRoom()) + "}");
+            items.add("{\"Category\":" + quote(exam.Category()) + ",\"CourseID\":" + quote(exam.CourseID()) + ",\"CourseName\":" + quote(exam.CourseName()) + ",\"Department\":" + quote(exam.Department()) + ",\"Credit\":" + quote(exam.Credit()) + ",\"StudentCount\":" + quote(exam.StudentCount()) + ",\"ChiefExaminer\":" + quote(exam.ChiefExaminer()) + ",\"Invigilators\":" + quote(exam.Invigilators()) + ",\"ExamTime\":" + quote(exam.ExamTime()) + ",\"ExamRoom\":" + quote(exam.ExamRoom()) + "}");
         }
         return "[" + String.join(",", items) + "]";
     }

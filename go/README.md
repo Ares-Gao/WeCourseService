@@ -19,7 +19,7 @@ go run .
 
 ConfigTool 会自动读取并同步保存仓库根目录的 `config.json` 和 `go/config.json`，界面支持中文/English 切换。
 
-authserver 登录可以在每次 WebSocket 请求中传入 `LoginType` 和 `AuthServerURL`，不需要把登录方式固定死在配置文件里。需要自动识别普通图片验证码时，配置 ddddocr ONNX 模型和 onnxruntime 动态库：
+authserver 登录通过 `config.json` 中的 `LoginType` 和 `AuthServerURL` 配置。业务请求不需要重复传递登录方式或统一认证地址；同一条 WebSocket 连接先发送一次 `login`，后续请求只传 `Type` 和业务参数。需要自动识别普通图片验证码时，配置 ddddocr ONNX 模型和 onnxruntime 动态库：
 
 ```json
 {

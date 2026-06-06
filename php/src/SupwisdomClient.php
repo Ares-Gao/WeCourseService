@@ -511,12 +511,30 @@ final class SupwisdomClient
         $result = [];
         foreach (preg_split('/(?=<div id="toolbar[^"]*")/i', $html) as $section) {
             $title = preg_match('/bg\.ui\.toolbar\("[^"]+",\'([^\']*)\'/', $section, $match) ? $this->cleanHtmlCell($match[1]) : '';
-            foreach ($this->tableRows($section) as $cells) {
+            $headers = [];
+            foreach ($this->examTableRows($section) as $row) {
+                $cells = $row['Cells'];
+                if ($row['Header']) {
+                    $headers = $cells;
+                    continue;
+                }
                 if (count($cells) < 7 || $cells[0] === '') {
                     continue;
                 }
-                $item = ['Category' => $title, 'CourseID' => $cells[0], 'CourseName' => $cells[1], 'Department' => $cells[2], 'Credit' => $cells[3], 'StudentCount' => '', 'Invigilators' => '', 'ExamTime' => '', 'ExamRoom' => ''];
-                if (count($cells) >= 8) {
+                $item = ['Category' => $title, 'CourseID' => $cells[0], 'CourseName' => $cells[1], 'Department' => $cells[2], 'Credit' => $cells[3], 'StudentCount' => '', 'ChiefExaminer' => '', 'Invigilators' => '', 'ExamTime' => '', 'ExamRoom' => ''];
+                if (count($headers) >= count($cells)) {
+                    $item['StudentCount'] = $this->cellByHeader($cells, $headers, ['人数', '学生数']);
+                    $item['ChiefExaminer'] = $this->cellByHeader($cells, $headers, ['主考']);
+                    $item['Invigilators'] = $this->cellByHeader($cells, $headers, ['监考']);
+                    $item['ExamTime'] = $this->cellByHeader($cells, $headers, ['时间', '安排']);
+                    $item['ExamRoom'] = $this->cellByHeader($cells, $headers, ['地点', '考场', '教室']);
+                } elseif (count($cells) >= 9) {
+                    $item['StudentCount'] = $cells[4];
+                    $item['ChiefExaminer'] = $cells[5];
+                    $item['Invigilators'] = $cells[6];
+                    $item['ExamTime'] = $cells[7];
+                    $item['ExamRoom'] = $cells[8];
+                } elseif (count($cells) >= 8) {
                     $item['Invigilators'] = $cells[4];
                     $item['StudentCount'] = $cells[5];
                     $item['ExamTime'] = $cells[6];
@@ -564,6 +582,54 @@ final class SupwisdomClient
             }
         }
         return $result;
+    }
+
+    private function examTableRows(string $html): array
+    {
+        preg_match_all('/<tr[^>]*>(.*?)<\/tr>/is', $html, $rows);
+        $result = [];
+        foreach ($rows[1] as $row) {
+            preg_match_all('/<(td|th)[^>]*>(.*?)<\/(?:td|th)>/is', $row, $cells, PREG_SET_ORDER);
+            if (count($cells) === 0) {
+                continue;
+            }
+            $values = [];
+            $header = false;
+            foreach ($cells as $cell) {
+                if (strtolower($cell[1]) === 'th') {
+                    $header = true;
+                }
+                $values[] = $this->cleanHtmlCell($cell[2]);
+            }
+            $header = $header || $this->looksLikeExamHeader($values);
+            $result[] = ['Cells' => $values, 'Header' => $header];
+        }
+        return $result;
+    }
+
+    private function looksLikeExamHeader(array $cells): bool
+    {
+        $headerNames = ['课程代码', '课程序号', '课程编号', '课程名称', '开课院系', '院系', '学分', '人数', '学生数', '主考', '监考', '考试时间', '考试地点', '地点', '考场', '教室'];
+        $count = 0;
+        foreach ($cells as $cell) {
+            if (in_array($cell, $headerNames, true)) {
+                $count++;
+            }
+        }
+        return $count >= 3;
+    }
+
+    private function cellByHeader(array $cells, array $headers, array $names): string
+    {
+        $limit = min(count($cells), count($headers));
+        for ($index = 0; $index < $limit; $index++) {
+            foreach ($names as $name) {
+                if (str_contains($headers[$index], $name)) {
+                    return $cells[$index];
+                }
+            }
+        }
+        return '';
     }
 
     private function cleanHtmlCell(string $value): string
